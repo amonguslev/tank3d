@@ -27,6 +27,7 @@
 - **Скрипти швидкого запуску** (автоматично додають `C:\Program Files\nodejs` у локальний `PATH`):
   - `start-dev.bat` — запуск Vite dev-сервера (`npm run dev -- --open`).
   - `start-pwa.bat` — повна продакшн-збірка та запуск локального PWA preview-сервера (`npm run build && npm run preview -- --open`).
+  - `push-github.bat` — відправка гілки `main` на GitHub (`git push -u origin main` із автоматичним додаванням шляху до Git та інтерактивною авторизацією через Git Credential Manager).
 - **Команди `package.json`:**
   - `npm run dev` — режим розробки
   - `npm run build` — перевірка типів `tsc` + продакшн-білд `vite build`
@@ -55,6 +56,7 @@ C:\Users\among\Projects\tank\
 ├── vite.config.ts            # Конфігурація Vite + VitePWA (маніфест українською, кешування ресурсів, manualChunks)
 ├── start-dev.bat             # Швидкий запуск dev-сервера на Windows
 ├── start-pwa.bat             # Збірка та запуски production PWA preview
+├── push-github.bat           # Швидкий пуш репозиторію на GitHub (гілка main)
 ├── public/
 │   ├── favicon.svg               # Векторна іконка танка
 │   ├── pwa-192x192.png           # Іконка PWA 192×192
@@ -143,6 +145,9 @@ C:\Users\among\Projects\tank\
 ---
 
 ## 6. Історія змін (Changelog)
+- **2026-11-14 (Створення скрипта push-github.bat):**
+  - Створено скрипт швидкого пушу `push-github.bat` для відправки гілки `main` на GitHub (`git push -u origin main` із налаштуванням шляху до Git).
+  - Оновлено `STATE.md` (розділи скриптів швидкого запуску та структури файлів).
 - **2026-11-14 (Оновлення посилань на GitHub та GitHub Pages):**
   - Додано посилання на GitHub-репозиторій (`https://github.com/amonguslev/tank3d`) та продакшн URL на GitHub Pages (`https://amonguslev.github.io/tank3d/`) у шапку `STATE.md`.
 - **2026-11-14 (Автоматичний деплой PWA на GitHub Pages):**
