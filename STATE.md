@@ -133,6 +133,8 @@ C:\Users\among\Projects\tank\
 ---
 
 ## 6. Історія змін (Changelog)
+- **2026-11-14 (Виправлення попередження VitePWA у dev-режимі):**
+  - Додано `devOptions.suppressWarnings: true` у `vite.config.ts` для усунення попередження Workbox `One of the glob patterns doesn't match any files` для `dev-dist` під час роботи dev-сервера.
 - **2026-11-14 (Фінальне полірування v2.0):**
   - Виконано точкові полірування стилів радара (`.radar-arrow` обертається по зовнішньому обідку маркера 32×32 без перекриття іконки), конфігурації Vite (`manualChunks` для `three` для усунення попереджень розміру бандла) та оновлено `STATE.md`.
   - Успішно проведено повну перевірку TypeScript (`tsc` 0 помилок) та продакшн-збірку PWA.
