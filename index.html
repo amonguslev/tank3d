@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0d1117" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Танчики 3D" />
+    <meta
+      name="description"
+      content="Танчики 3D v2.0 — 360° Twin-Stick танковий екшн. Brawl Stars стік прицілу, 3D Ангар із прокачкою, захист Штабу, бійки з Босами та Нескінченна Орда!"
+    />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/pwa-192x192.png" />
+    <title>Танчики 3D — 360° Twin-Stick Battle</title>
+  </head>
+  <body>
+    <div id="app">
+      <!-- 3D Game Canvas -->
+      <canvas id="game-canvas"></canvas>
+
+      <!-- Overlay Radar & Floating Numbers Layers -->
+      <div id="radar-layer" class="radar-layer"></div>
+      <div id="floating-layer" class="floating-layer"></div>
+
+      <!-- Top In-Game HUD -->
+      <header id="hud" class="hud hidden">
+        <div class="hud-group">
+          <div class="hud-stat">
+            <span id="hud-stage-label" class="hud-label">РІВЕНЬ</span>
+            <span id="hud-stage" class="hud-value accent">1</span>
+          </div>
+          <div class="hud-stat">
+            <span class="hud-label">ВОРОГИ</span>
+            <span id="hud-enemies" class="hud-value danger">20</span>
+          </div>
+          <div class="hud-stat">
+            <span class="hud-label">ЖИТТЯ</span>
+            <span id="hud-lives" class="hud-value">3</span>
+          </div>
+          <div class="hud-stat">
+            <span class="hud-label">МОНЕТИ</span>
+            <span id="hud-coins" class="hud-value gold">🪙 0</span>
+          </div>
+        </div>
+
+        <!-- Health Bars (Player & Base HQ) -->
+        <div class="hud-bars-group">
+          <!-- Player Tank HP -->
+          <div class="hud-hp-card player-hp-card" title="Міцність танка">
+            <div class="hud-hp-meta">
+              <span class="hud-hp-title">🛡️ ТАНК</span>
+              <span id="hud-player-hp-text" class="hud-hp-val">100 / 100</span>
+            </div>
+            <div class="hud-hp-bar">
+              <div id="hud-player-hp-fill" class="hud-hp-fill player-fill" style="width: 100%"></div>
+            </div>
+          </div>
+
+          <!-- HQ / Base HP -->
+          <div id="hud-base-card" class="hud-hp-card base-hp-card" title="Міцність Штабу">
+            <div class="hud-hp-meta">
+              <span class="hud-hp-title">🦅 ШТАБ</span>
+              <span id="hud-base-hp-text" class="hud-hp-val">100 / 100</span>
+            </div>
+            <div class="hud-hp-bar">
+              <div id="hud-base-hp-fill" class="hud-hp-fill base-fill" style="width: 100%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Score & Stats -->
+        <div class="hud-group hud-score-group">
+          <div class="hud-stat">
+            <span class="hud-label">РАХУНОК</span>
+            <span id="hud-score" class="hud-value">0</span>
+          </div>
+          <div class="hud-stat hide-xs">
+            <span class="hud-label">РЕКОРД</span>
+            <span id="hud-best" class="hud-value gold">0</span>
+          </div>
+          <!-- Preserved element for HudState / compatibility -->
+          <span id="hud-stars" class="hud-value gold hidden">☆ ☆ ☆</span>
+        </div>
+
+        <!-- Quick Action Buttons -->
+        <div class="hud-actions">
+          <button id="btn-camera" class="icon-btn" title="Змінити камеру (C)" aria-label="Камера">📷</button>
+          <button id="btn-touch-toggle" class="icon-btn" title="Сенсорне керування" aria-label="Джойстик">🎮</button>
+          <button id="btn-sound" class="icon-btn" title="Звук" aria-label="Звук">🔊</button>
+          <button id="btn-pause" class="icon-btn" title="Пауза (P / Esc)" aria-label="Пауза">⏸</button>
+        </div>
+      </header>
+
+      <!-- Boss Health Bar -->
+      <div id="boss-bar" class="boss-bar hidden">
+        <div class="boss-bar-header">
+          <span class="boss-icon">☠️</span>
+          <span id="boss-name" class="boss-name">БОС: МАМОНТ</span>
+          <span id="boss-hp-text" class="boss-hp-text">1200 / 1200</span>
+        </div>
+        <div class="boss-hp-track">
+          <div id="boss-hp-fill" class="boss-hp-fill" style="width: 100%"></div>
+        </div>
+      </div>
+
+      <!-- Active Buffs Bar -->
+      <div id="buffs-bar" class="buffs-bar hidden"></div>
+
+      <!-- Stage Intro Banner -->
+      <div id="stage-banner" class="stage-banner hidden">
+        <div id="stage-banner-sub" class="stage-banner-sub">ПРИГОТУЙТЕСЬ ДО БОЮ</div>
+        <div id="stage-banner-title" class="stage-banner-title">РІВЕНЬ 1</div>
+        <div id="stage-banner-name" class="stage-banner-name">Перший рубіж</div>
+      </div>
+
+      <!-- Main Menu Screen -->
+      <section id="menu-screen" class="overlay-screen">
+        <div class="panel menu-panel">
+          <div class="badge-row">
+            <span class="pwa-badge" id="offline-badge">⚡ 3D WebGL</span>
+            <div class="menu-top-right">
+              <span id="menu-coins" class="coin-pill">🪙 0</span>
+              <button id="btn-menu-sound" class="mini-pill-btn">🔊 Звук: Увімк</button>
+            </div>
+          </div>
+
+          <h1 class="game-title">ТАНЧИКИ <span>3D</span></h1>
+          <p class="game-subtitle">360° TWIN-STICK • ЗАХИСТ ШТАБУ • БОСИ</p>
+
+          <!-- Mode switcher tabs -->
+          <div class="mode-tabs">
+            <button id="btn-mode-campaign" class="mode-tab active" type="button">🛡️ Кампанія</button>
+            <button id="btn-mode-horde" class="mode-tab" type="button">🔥 Нескінченна Орда</button>
+          </div>
+
+          <!-- Stats Grid -->
+          <div class="stats-grid">
+            <div class="stat-box">
+              <span class="stat-box-label">РЕКОРД</span>
+              <span id="menu-best-score" class="stat-box-val gold">0</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-box-label">ХВИЛІ ОРДИ</span>
+              <span id="menu-best-horde" class="stat-box-val accent">0</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-box-label">ЗНИЩЕНО</span>
+              <span id="menu-total-kills" class="stat-box-val">0</span>
+            </div>
+            <!-- Preserved for main.ts compatibility -->
+            <span id="menu-max-stage" class="hidden">1</span>
+          </div>
+
+          <!-- Campaign Stage Selector -->
+          <div id="campaign-stage-box" class="stage-selector">
+            <button id="btn-stage-prev" class="stage-nav-btn" aria-label="Попередній рівень">◀</button>
+            <div class="stage-selector-info">
+              <span class="stage-selector-label">ОБРАНИЙ РІВЕНЬ</span>
+              <strong id="menu-selected-stage">Рівень 1 — Перший рубіж</strong>
+            </div>
+            <button id="btn-stage-next" class="stage-nav-btn" aria-label="Наступний рівень">▶</button>
+          </div>
+
+          <!-- Horde Mode Info Box (visible when Horde tab active) -->
+          <div id="horde-info-box" class="horde-info-box hidden">
+            <div class="horde-info-badge">БЕЗКІНЕЧНИЙ БІЙ</div>
+            <p>Захищай Штаб проти нескінченних хвиль. Могутні Боси кожні 5 хвиль та щедрі нагороди 🪙 за кожен знищений танк!</p>
+          </div>
+
+          <!-- Selected Tank Indicator & Hangar Button -->
+          <div class="current-tank-card">
+            <div class="current-tank-info">
+              <span class="current-tank-label">ОБРАНИЙ ТАНК</span>
+              <strong id="menu-current-tank" class="current-tank-name">⭐ Універсал</strong>
+            </div>
+            <button id="btn-open-hangar" class="hangar-btn" type="button">
+              🔧 3D АНГАР ТА ПРОКАЧКА
+            </button>
+          </div>
+
+          <div class="menu-buttons">
+            <button id="btn-start" class="primary-btn">▶ В БІЙ!</button>
+            <button id="btn-install" class="install-btn hidden">📲 Встановити гру на пристрій</button>
+          </div>
+
+          <div class="controls-hint">
+            <div><strong>ПК:</strong> WASD — рух • Миша (приціл + клік) або Space (вогонь) • C — камера • P — пауза</div>
+            <div><strong>Мобільні:</strong> Лівий стік — 360° рух • Правий стік: тягни для прицілу, швидкий тап для автоатаки</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3D Hangar Screen (Live 3D View with side/bottom panel) -->
+      <section id="hangar-screen" class="hangar-overlay hidden">
+        <div class="hangar-layout">
+          <!-- 3D Turntable view area (desktop: left side, mobile: top side) -->
+          <div class="hangar-stage-area">
+            <div class="hangar-stage-badge">3D ОГЛЯД ТАНКА • ЖИВИЙ ПОДІУМ</div>
+          </div>
+
+          <!-- Hangar Side/Bottom Card Panel -->
+          <div class="hangar-panel">
+            <div class="hangar-header">
+              <button id="btn-close-hangar" class="secondary-pill-btn" type="button">← У меню</button>
+              <div class="hangar-coins-pill">
+                <span id="hangar-coins" class="coin-val">🪙 0</span>
+              </div>
+            </div>
+
+            <!-- Class Selection Tabs -->
+            <div id="hangar-class-tabs" class="hangar-class-tabs"></div>
+
+            <!-- Tank Description Box -->
+            <div class="hangar-tank-details">
+              <div class="hangar-title-row">
+                <div>
+                  <h2 id="hangar-tank-name" class="hangar-tank-name">Універсал</h2>
+                  <div id="hangar-tank-sub" class="hangar-tank-sub">Збалансований штурмовик</div>
+                </div>
+                <button id="btn-hangar-action" class="hangar-action-btn" type="button">✓ Обрано</button>
+              </div>
+              <p id="hangar-tank-desc" class="hangar-tank-desc">
+                Надійний танк із гармонійним поєднанням броні, швидкості та скорострільності.
+              </p>
+            </div>
+
+            <!-- Upgrades List -->
+            <div class="hangar-section-title">ПРОКАЧКА ХАРАКТЕРИСТИК (0..5)</div>
+            <div id="hangar-upgrades-list" class="hangar-upgrades-list"></div>
+
+            <!-- Base Fortification Block -->
+            <div class="hangar-base-card">
+              <div class="hangar-base-meta">
+                <div>
+                  <div class="hangar-base-title">🦅 ФОРТИФІКАЦІЯ ШТАБУ</div>
+                  <div id="hangar-base-info" class="hangar-base-info">Рівень 0 / 5 (+0% HP)</div>
+                </div>
+                <button id="btn-upgrade-base" class="upgrade-btn" type="button">
+                  Укріпити • 100 🪙
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Pause Modal -->
+      <section id="pause-screen" class="overlay-screen hidden">
+        <div class="panel compact-panel">
+          <h2 class="modal-title">ПАУЗА</h2>
+          <p class="modal-desc">Бій тимчасово зупинено</p>
+          <div class="menu-buttons">
+            <button id="btn-resume" class="primary-btn">▶ Продовжити</button>
+            <button id="btn-pause-camera" class="secondary-btn">📷 Камера: Класична 3D</button>
+            <button id="btn-restart" class="secondary-btn">↻ Почати рівень заново</button>
+            <button id="btn-quit" class="danger-btn">⌂ Вийти в меню</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Victory Screen -->
+      <section id="victory-screen" class="overlay-screen hidden">
+        <div class="panel compact-panel">
+          <div class="victory-tag">ПЕРЕМОГА!</div>
+          <h2 id="victory-title" class="modal-title">РІВЕНЬ 1 ПРОЙДЕНО</h2>
+
+          <div class="score-breakdown" id="victory-breakdown"></div>
+
+          <div class="reward-row">
+            <span>Зароблені монети:</span>
+            <strong id="victory-coins-earned" class="gold">+0 🪙</strong>
+          </div>
+
+          <div class="total-score-row">
+            <span>Загальний рахунок:</span>
+            <strong id="victory-total-score" class="gold">0</strong>
+          </div>
+
+          <div class="menu-buttons">
+            <button id="btn-next-stage" class="primary-btn">Наступний рівень ➔</button>
+            <button id="btn-victory-hangar" class="secondary-btn">🔧 Ангар і Прокачка</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Game Over Screen -->
+      <section id="gameover-screen" class="overlay-screen hidden">
+        <div class="panel compact-panel">
+          <div class="gameover-tag">БІЙ ЗАВЕРШЕНО</div>
+          <h2 class="modal-title danger-text">ПОРАЗКА</h2>
+          <p id="gameover-reason" class="modal-desc">Штаб було зруйновано!</p>
+
+          <div id="new-record-badge" class="new-record hidden">🏆 НОВИЙ РЕКОРД!</div>
+
+          <div class="stats-grid two-cols">
+            <div class="stat-box">
+              <span class="stat-box-label">РАХУНОК</span>
+              <span id="gameover-score" class="stat-box-val gold">0</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-box-label">РЕКОРД</span>
+              <span id="gameover-best" class="stat-box-val">0</span>
+            </div>
+          </div>
+
+          <div class="reward-row">
+            <span>Зібрано монет:</span>
+            <strong id="gameover-coins-earned" class="gold">+0 🪙</strong>
+          </div>
+
+          <div class="menu-buttons">
+            <button id="btn-retry" class="primary-btn">↻ Спробувати знову</button>
+            <button id="btn-gameover-hangar" class="secondary-btn">🔧 Ангар і Прокачка</button>
+            <button id="btn-gameover-menu" class="secondary-btn">⌂ В головне меню</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Mobile Twin-Stick Controls -->
+      <div id="touch-controls" class="touch-controls hidden">
+        <!-- Left Move Analog Stick -->
+        <div class="stick-zone left-stick-zone">
+          <div class="stick-base move-stick-base" id="move-stick-base">
+            <div class="stick-ring"></div>
+            <div class="stick-knob move-stick-knob" id="move-stick-knob"></div>
+            <span class="stick-label">РУХ</span>
+          </div>
+        </div>
+
+        <!-- Right Aim Stick (Brawl Stars Style) -->
+        <div class="stick-zone right-stick-zone">
+          <div class="stick-base aim-stick-base" id="aim-stick-base">
+            <div class="stick-ring aim-ring"></div>
+            <div class="stick-knob aim-stick-knob" id="aim-stick-knob"></div>
+            <span class="stick-label">ВОГОНЬ / АВТО</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
