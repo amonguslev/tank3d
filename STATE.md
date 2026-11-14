@@ -1,7 +1,9 @@
 # STATE.md — Поточний стан проєкту «Танчики 3D (Battle City PWA)»
 
 > **Останнє оновлення:** 2026-11-14  
-> **Статус:** ✅ **Готово — v2.0 Production PWA зібрано та перевірено (TypeScript 0 помилок)**
+> **Статус:** ✅ **Готово — v2.0 Production PWA зібрано та перевірено (TypeScript 0 помилок)**  
+> **GitHub Репозиторій:** [https://github.com/amonguslev/tank3d](https://github.com/amonguslev/tank3d) (`origin`)  
+> **Продакшн URL (GitHub Pages):** [https://amonguslev.github.io/tank3d/](https://amonguslev.github.io/tank3d/)
 
 ---
 
@@ -141,6 +143,8 @@ C:\Users\among\Projects\tank\
 ---
 
 ## 6. Історія змін (Changelog)
+- **2026-11-14 (Оновлення посилань на GitHub та GitHub Pages):**
+  - Додано посилання на GitHub-репозиторій (`https://github.com/amonguslev/tank3d`) та продакшн URL на GitHub Pages (`https://amonguslev.github.io/tank3d/`) у шапку `STATE.md`.
 - **2026-11-14 (Автоматичний деплой PWA на GitHub Pages):**
   - Додано GitHub Actions workflow `.github/workflows/deploy.yml` для автоматичного деплою PWA на GitHub Pages.
   - Оновлено `vite.config.ts`: додано підтримку змінної середовища `BASE_PATH` (за замовчуванням `/`) та налаштовано `start_url: base` і `scope: base` для маніфесту PWA.
