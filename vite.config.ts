@@ -1,7 +1,10 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+const base = process.env.BASE_PATH || '/';
+
 export default defineConfig({
+  base,
   build: {
     rollupOptions: {
       output: {
@@ -29,8 +32,8 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'any',
         lang: 'uk',
-        start_url: '/',
-        scope: '/',
+        start_url: base,
+        scope: base,
         categories: ['games', 'action', 'arcade'],
         icons: [
           {

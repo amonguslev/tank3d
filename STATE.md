@@ -30,12 +30,20 @@
   - `npm run build` — перевірка типів `tsc` + продакшн-білд `vite build`
   - `npm run preview` — перегляд зібраної PWA-версії з `dist/`
 
+### Деплой на GitHub Pages (CI/CD)
+- Налаштовано GitHub Actions workflow (`.github/workflows/deploy.yml`) для автоматичної збірки та публікації PWA на GitHub Pages при пуші в гілки `main` або `master` (а також вручну через `workflow_dispatch`).
+- Автоматичне визначення `BASE_PATH`: workflow формує шлях для `npm run build` (`/${{ github.event.repository.name }}/` або `/` для `<user>.github.io`).
+- `vite.config.ts` використовує змінну оточення `BASE_PATH`, передаючи її як базовий префікс у конфіг Vite та у `start_url` / `scope` PWA Web App Manifest, забезпечуючи повноцінну роботу PWA та кнопку встановлення як локально, так і в піддиректорії GitHub Pages.
+
 ---
 
 ## 3. Структура файлів проєкту
 
 ```text
 C:\Users\among\Projects\tank\
+├── .github/
+│   └── workflows/
+│       └── deploy.yml        # CI/CD автоматичного деплою PWA на GitHub Pages
 ├── AGENTS.md                 # Правила оркестрації (Carbon оркестратор/рев'ювер + flash/flash_lite суб-агенти + STATE.md)
 ├── STATE.md                  # Єдине джерело правди про поточний стан проєкту
 ├── .gitignore                # Службові та згенеровані директорії (node_modules, dist тощо)
@@ -133,6 +141,10 @@ C:\Users\among\Projects\tank\
 ---
 
 ## 6. Історія змін (Changelog)
+- **2026-11-14 (Автоматичний деплой PWA на GitHub Pages):**
+  - Додано GitHub Actions workflow `.github/workflows/deploy.yml` для автоматичного деплою PWA на GitHub Pages.
+  - Оновлено `vite.config.ts`: додано підтримку змінної середовища `BASE_PATH` (за замовчуванням `/`) та налаштовано `start_url: base` і `scope: base` для маніфесту PWA.
+  - Оновлено документацію у `STATE.md`.
 - **2026-11-14 (Виправлення попередження VitePWA у dev-режимі):**
   - Додано `devOptions.suppressWarnings: true` у `vite.config.ts` для усунення попередження Workbox `One of the glob patterns doesn't match any files` для `dev-dist` під час роботи dev-сервера.
 - **2026-11-14 (Фінальне полірування v2.0):**
