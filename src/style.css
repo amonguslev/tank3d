@@ -1,18 +1,42 @@
+/* ==========================================================================
+   ТАНЧИКИ 3D: WORLD OF TANKS EDITION (v3.0) — AUTHENTIC TANK INTERFACE
+   ========================================================================== */
+
 :root {
-  --bg-dark: #0a0d13;
-  --panel-bg: rgba(16, 22, 34, 0.92);
-  --panel-border: rgba(94, 129, 172, 0.32);
-  --accent: #38bdf8;
-  --accent-glow: rgba(56, 189, 248, 0.35);
-  --gold: #fbbf24;
-  --gold-glow: rgba(251, 191, 36, 0.35);
-  --gold-dark: #d97706;
-  --danger: #f43f5e;
-  --danger-glow: rgba(244, 63, 94, 0.35);
-  --success: #22c55e;
-  --purple: #c084fc;
-  --text-main: #f1f5f9;
-  --text-muted: #94a3b8;
+  /* WoT Dark Armor Theme */
+  --wot-bg-dark: #080b10;
+  --wot-armor-surface: #121820;
+  --wot-armor-panel: rgba(18, 24, 34, 0.93);
+  --wot-armor-card: rgba(24, 32, 46, 0.88);
+  --wot-armor-border: rgba(92, 118, 148, 0.32);
+  --wot-armor-highlight: rgba(255, 255, 255, 0.08);
+
+  /* WoT Amber / Orange Battle Colors */
+  --wot-orange: #ff9800;
+  --wot-orange-hover: #ffa726;
+  --wot-orange-dark: #b23b00;
+  --wot-orange-glow: rgba(255, 152, 0, 0.45);
+
+  /* Tactical Green (Sniper Scope & Markers) */
+  --wot-green: #00ff85;
+  --wot-green-dim: #10b981;
+  --wot-green-glow: rgba(0, 255, 133, 0.4);
+
+  /* Tesla Neon-Cyan Accent (Tier V Electric Tank) */
+  --wot-cyan: #00e5ff;
+  --wot-cyan-glow: rgba(0, 229, 255, 0.5);
+
+  /* Currencies, States & Stats */
+  --wot-gold: #fbbf24;
+  --wot-silver: #cbd5e1;
+  --wot-danger: #ef4444;
+  --wot-danger-glow: rgba(239, 68, 68, 0.45);
+  --wot-health: #22c55e;
+
+  /* Typography */
+  --wot-text-main: #f1f5f9;
+  --wot-text-muted: #94a3b8;
+  --wot-font-main: system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, sans-serif;
 }
 
 * {
@@ -30,9 +54,9 @@ body,
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: var(--bg-dark);
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, sans-serif;
-  color: var(--text-main);
+  background: var(--wot-bg-dark);
+  font-family: var(--wot-font-main);
+  color: var(--wot-text-main);
   touch-action: none;
 }
 
@@ -40,6 +64,7 @@ body,
   display: block;
   width: 100%;
   height: 100%;
+  background: #000;
 }
 
 .hidden {
@@ -47,139 +72,86 @@ body,
 }
 
 /* ==========================================================================
-   Overlay Layers (Radar & Floating Numbers)
+   2D Overlays: Enemy Plates & Floating Combat Text
    ========================================================================== */
-.radar-layer {
+.enemy-plates,
+.floating-texts {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 18;
+  z-index: 15;
   overflow: hidden;
 }
 
-.radar-marker {
+/* 2D WoT Tank Marker Plate (Tier, Name, HP Bar) */
+.enemy-plate {
   position: absolute;
-  pointer-events: none;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -100%);
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.85));
+  gap: 3px;
+  pointer-events: none;
   transition: opacity 0.15s ease-out;
   will-change: transform, opacity;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.9));
 }
 
-.radar-marker .radar-icon {
-  font-size: 14px;
-  line-height: 1;
+.enemy-plate-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(12, 17, 24, 0.85);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fecdd3;
 }
 
-.radar-marker.base {
-  color: #38bdf8;
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.35) 0%, rgba(14, 165, 233, 0.12) 70%, transparent 100%);
-  border: 1.5px solid #38bdf8;
-  box-shadow: 0 0 12px var(--accent-glow);
-  animation: radarBasePulse 1.8s ease-in-out infinite;
+.enemy-plate-tier {
+  color: var(--wot-gold);
+  font-size: 10px;
 }
 
-.radar-marker.boss {
-  color: #f43f5e;
-  width: 38px;
-  height: 38px;
-  background: radial-gradient(circle, rgba(244, 63, 94, 0.45) 0%, rgba(168, 85, 247, 0.22) 70%, transparent 100%);
-  border: 2px solid #ef4444;
-  box-shadow: 0 0 16px var(--danger-glow);
-  animation: radarBossPulse 1s ease-in-out infinite;
-}
-
-.radar-marker.enemy {
-  color: #fb923c;
-  width: 26px;
-  height: 26px;
-  background: rgba(234, 88, 12, 0.22);
-  border: 1.5px solid rgba(251, 146, 60, 0.8);
-}
-
-.radar-marker.urgent {
-  animation: radarUrgentBlink 0.4s infinite alternate !important;
-  border-color: #ff0055 !important;
-  box-shadow: 0 0 18px rgba(255, 0, 85, 0.8) !important;
-}
-
-.radar-arrow {
-  position: absolute;
-  top: -9px;
-  width: 0;
-  height: 0;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-bottom: 8px solid currentColor;
-  transform-origin: 50% 25px;
-  pointer-events: none;
-}
-
-@keyframes radarBasePulse {
-  0%, 100% {
-    transform: translate(-50%, -50%) scale(1);
-    box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
-  }
-  50% {
-    transform: translate(-50%, -50%) scale(1.12);
-    box-shadow: 0 0 20px rgba(56, 189, 248, 0.65);
-  }
-}
-
-@keyframes radarBossPulse {
-  0%, 100% {
-    transform: translate(-50%, -50%) scale(1);
-    box-shadow: 0 0 12px rgba(239, 68, 68, 0.4);
-  }
-  50% {
-    transform: translate(-50%, -50%) scale(1.16);
-    box-shadow: 0 0 24px rgba(239, 68, 68, 0.85);
-  }
-}
-
-@keyframes radarUrgentBlink {
-  from {
-    opacity: 0.4;
-    transform: translate(-50%, -50%) scale(0.92);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1.18);
-  }
-}
-
-.floating-layer {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 24;
+.enemy-plate-bar {
+  width: 72px;
+  height: 6px;
+  background: rgba(15, 20, 28, 0.92);
+  border: 1px solid rgba(0, 0, 0, 0.85);
+  border-radius: 2px;
   overflow: hidden;
 }
 
+.enemy-plate-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ef4444 0%, #f97316 100%);
+  transition: width 0.12s ease-out;
+}
+
+/* Floating Numbers & Badges */
 .floating-text {
   position: absolute;
   transform: translate(-50%, -50%);
   font-weight: 900;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.95), 0 0 2px #000;
   pointer-events: none;
   will-change: transform, opacity;
-  animation: floatUp 0.85s cubic-bezier(0.18, 0.8, 0.2, 1) forwards;
+  animation: floatDamage 0.85s cubic-bezier(0.18, 0.8, 0.2, 1) forwards;
 }
 
-.floating-text.big {
-  font-size: 21px;
-  animation: floatUpBig 0.95s cubic-bezier(0.18, 0.89, 0.32, 1.25) forwards;
+.floating-text.crit {
+  font-size: 24px;
+  color: var(--wot-orange) !important;
+  text-shadow: 0 0 12px var(--wot-orange-glow), 0 2px 8px #000;
+  animation: floatDamageCrit 0.95s cubic-bezier(0.18, 0.89, 0.32, 1.25) forwards;
 }
 
-@keyframes floatUp {
+@keyframes floatDamage {
   0% {
     opacity: 0;
     transform: translate(-50%, 0) scale(0.7);
@@ -188,320 +160,1629 @@ body,
     opacity: 1;
     transform: translate(-50%, -10px) scale(1.08);
   }
-  75% {
+  80% {
     opacity: 1;
-    transform: translate(-50%, -34px) scale(1);
+    transform: translate(-50%, -36px) scale(1);
   }
   100% {
     opacity: 0;
-    transform: translate(-50%, -46px) scale(0.9);
+    transform: translate(-50%, -50px) scale(0.85);
   }
 }
 
-@keyframes floatUpBig {
+@keyframes floatDamageCrit {
   0% {
     opacity: 0;
     transform: translate(-50%, 0) scale(0.5);
   }
-  18% {
+  20% {
     opacity: 1;
     transform: translate(-50%, -14px) scale(1.3);
   }
-  75% {
+  80% {
     opacity: 1;
-    transform: translate(-50%, -42px) scale(1.1);
+    transform: translate(-50%, -44px) scale(1.1);
   }
   100% {
     opacity: 0;
-    transform: translate(-50%, -56px) scale(0.92);
+    transform: translate(-50%, -60px) scale(0.9);
   }
 }
 
 /* ==========================================================================
-   Top In-Game HUD
+   Arcade Reticle (3rd Person WoT Reticle)
    ========================================================================== */
-.hud {
+.arcade-reticle {
   position: fixed;
-  top: env(safe-area-inset-top, 0px);
+  inset: 0;
+  pointer-events: none;
+  z-index: 18;
+}
+
+/* Fixed Center Crosshair */
+.camera-crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+}
+
+.crosshair-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--wot-green);
+  box-shadow: 0 0 6px var(--wot-green-glow);
+}
+
+.crosshair-line {
+  position: absolute;
+  background: rgba(0, 255, 133, 0.75);
+}
+
+.line-top {
+  top: 0;
+  left: 11px;
+  width: 2px;
+  height: 6px;
+}
+.line-bottom {
+  bottom: 0;
+  left: 11px;
+  width: 2px;
+  height: 6px;
+}
+.line-left {
   left: 0;
+  top: 11px;
+  width: 6px;
+  height: 2px;
+}
+.line-right {
   right: 0;
+  top: 11px;
+  width: 6px;
+  height: 2px;
+}
+
+/* Dynamic Turret Aim Ring (Dispersion circle) */
+.turret-aim-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 54px;
+  height: 54px;
+  margin-top: -27px;
+  margin-left: -27px;
+  pointer-events: none;
+  will-change: transform;
+  transition: transform 0.04s linear;
+}
+
+.aim-ring-circle {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 1.5px dashed rgba(0, 255, 133, 0.7);
+  box-shadow: 0 0 8px rgba(0, 255, 133, 0.25);
+  animation: slowRingRotate 12s linear infinite;
+}
+
+.aim-marker {
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 2px;
+  background: var(--wot-green);
+  margin-top: -1px;
+}
+
+.marker-left {
+  left: -8px;
+}
+.marker-right {
+  right: -8px;
+}
+
+@keyframes slowRingRotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.reticle-reload-text {
+  position: absolute;
+  top: calc(50% + 34px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--wot-green);
+  text-shadow: 0 0 6px var(--wot-green-glow), 0 2px 4px #000;
+}
+
+/* Target Info Plate under Aim */
+.target-info {
+  position: absolute;
+  top: calc(50% + 50px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(14, 20, 29, 0.92);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  border-radius: 6px;
+  padding: 4px 10px;
+  min-width: 140px;
+  text-align: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.75);
+  pointer-events: none;
+}
+
+.target-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fecdd3;
+  margin-bottom: 3px;
+}
+
+.target-hp-track {
+  width: 100%;
+  height: 5px;
+  background: rgba(0, 0, 0, 0.8);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 2px;
+}
+
+.target-hp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ef4444 0%, #f97316 100%);
+  transition: width 0.1s ease-out;
+}
+
+.target-hp-text {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--wot-text-muted);
+}
+
+/* ==========================================================================
+   Sniper Mode Fullscreen Overlay
+   ========================================================================== */
+.sniper-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 22;
+  pointer-events: none;
+}
+
+/* Optical Periscope Vignette */
+.sniper-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at center,
+    transparent 36%,
+    rgba(0, 10, 4, 0.55) 60%,
+    rgba(2, 6, 4, 0.92) 80%,
+    rgba(0, 0, 0, 0.98) 100%
+  );
+  box-shadow: inset 0 0 120px rgba(0, 0, 0, 0.95);
+}
+
+.sniper-grid {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sniper-crosshair {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cross-center-dot {
+  width: 5px;
+  height: 5px;
+  background: var(--wot-green);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--wot-green);
+}
+
+.cross-h-line {
+  position: absolute;
+  top: 50%;
+  left: 15%;
+  right: 15%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(0, 255, 133, 0.4) 30%,
+    rgba(0, 255, 133, 0.8) 50%,
+    rgba(0, 255, 133, 0.4) 70%,
+    transparent 100%
+  );
+  transform: translateY(-50%);
+}
+
+.cross-v-line {
+  position: absolute;
+  left: 50%;
+  top: 15%;
+  bottom: 15%;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(0, 255, 133, 0.4) 30%,
+    rgba(0, 255, 133, 0.8) 50%,
+    rgba(0, 255, 133, 0.4) 70%,
+    transparent 100%
+  );
+  transform: translateX(-50%);
+}
+
+.sniper-circle {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 255, 133, 0.35);
+  box-shadow: 0 0 12px rgba(0, 255, 133, 0.15);
+}
+
+.outer-ring {
+  width: min(72vw, 72vh);
+  height: min(72vw, 72vh);
+}
+
+.inner-ring {
+  width: min(32vw, 32vh);
+  height: min(32vw, 32vh);
+  border-style: dashed;
+}
+
+/* Sniper Rangefinder & Telemetry */
+.sniper-telemetry {
+  position: absolute;
+  top: calc(50% - 90px);
+  right: calc(50% + 70px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: right;
+  text-shadow: 0 0 6px var(--wot-green-glow);
+}
+
+.telemetry-box {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.telemetry-label {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: rgba(0, 255, 133, 0.75);
+}
+
+.telemetry-val {
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--wot-green);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Sniper Reload HUD */
+.sniper-reload-box {
+  position: absolute;
+  top: calc(50% + 64px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 140px;
+}
+
+.sniper-weapon-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--wot-green);
+  text-shadow: 0 0 6px var(--wot-green-glow);
+}
+
+.sniper-reload-track {
+  width: 120px;
+  height: 5px;
+  background: rgba(0, 20, 10, 0.85);
+  border: 1px solid rgba(0, 255, 133, 0.5);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.sniper-reload-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00ff85 0%, #38bdf8 100%);
+  box-shadow: 0 0 8px var(--wot-green-glow);
+  transition: width 0.08s linear;
+}
+
+.sniper-reload-text {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--wot-green);
+}
+
+/* ==========================================================================
+   Pointer Hint & Wave Announcement Banner
+   ========================================================================== */
+.pointer-hint {
+  position: fixed;
+  bottom: 84px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
+  background: rgba(14, 20, 28, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 999px;
+  padding: 6px 16px;
+  font-size: 12px;
+  color: var(--wot-text-main);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  animation: hintPulse 2.5s infinite;
+}
+
+.pointer-hint strong {
+  color: var(--wot-orange);
+}
+
+@keyframes hintPulse {
+  0%, 100% {
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-2px);
+  }
+}
+
+.wave-banner {
+  position: fixed;
+  inset: 0;
+  z-index: 26;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle, rgba(12, 17, 24, 0.8) 0%, rgba(8, 11, 16, 0.4) 100%);
+  pointer-events: none;
+  animation: bannerFade 0.3s ease-out;
+}
+
+@keyframes bannerFade {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.wave-banner-sub {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  color: var(--wot-orange);
+  margin-bottom: 6px;
+  text-shadow: 0 0 10px var(--wot-orange-glow);
+}
+
+.wave-banner-title {
+  font-size: clamp(38px, 8vw, 68px);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: #fff;
+  text-shadow: 0 4px 28px rgba(0, 0, 0, 0.8), 0 0 20px rgba(255, 152, 0, 0.4);
+}
+
+/* ==========================================================================
+   Battle HUD (World of Tanks Authentic Battle Screen)
+   ========================================================================== */
+.battle-hud {
+  position: fixed;
+  inset: 0;
   z-index: 20;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: env(safe-area-inset-top, 8px) env(safe-area-inset-right, 12px) env(safe-area-inset-bottom, 8px) env(safe-area-inset-left, 12px);
+}
+
+/* Top Battle Status Bar */
+.hud-top-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 14px;
-  background: linear-gradient(180deg, rgba(10, 14, 22, 0.94) 0%, rgba(10, 14, 22, 0.72) 85%, transparent 100%);
-  backdrop-filter: blur(6px);
-  pointer-events: none;
+  background: linear-gradient(180deg, rgba(10, 14, 20, 0.95) 0%, rgba(10, 14, 20, 0.7) 80%, transparent 100%);
+  padding: 6px 14px 14px;
+  margin: -8px -12px 0;
 }
 
-.hud-group,
-.hud-actions {
+.hud-top-left,
+.hud-top-right,
+.hud-top-actions {
   display: flex;
   align-items: center;
   gap: 8px;
   pointer-events: auto;
 }
 
-.hud-stat {
+.hud-badge-mode {
   display: flex;
   flex-direction: column;
-  background: rgba(20, 28, 42, 0.85);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 10px;
+  background: rgba(22, 29, 41, 0.88);
+  border: 1px solid var(--wot-armor-border);
+  border-radius: 8px;
   padding: 4px 10px;
-  min-width: 58px;
+}
+
+.hud-mode-title {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: var(--wot-text-muted);
+}
+
+.hud-wave-badge {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--wot-orange);
+}
+
+.hud-stat-box {
+  display: flex;
+  flex-direction: column;
+  background: rgba(20, 27, 38, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  padding: 4px 10px;
+  min-width: 56px;
   text-align: center;
 }
 
-.hud-label {
-  font-size: 9px;
+.hud-stat-label {
+  font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: var(--text-muted);
+  color: var(--wot-text-muted);
 }
 
-.hud-value {
-  font-size: 15px;
+.hud-stat-val {
+  font-size: 14px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 
-.accent {
-  color: var(--accent);
+.hud-stat-val.gold {
+  color: var(--wot-gold);
 }
-.gold {
-  color: var(--gold);
+.hud-stat-val.silver {
+  color: #e2e8f0;
 }
-.danger {
-  color: var(--danger);
-}
-.danger-text {
-  color: var(--danger);
+.hud-stat-val.danger {
+  color: var(--wot-danger);
 }
 
-/* HUD Bars (Player & Base HP) */
-.hud-bars-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  pointer-events: auto;
-  flex: 1;
-  max-width: 440px;
-  margin: 0 6px;
-}
-
-.hud-hp-card {
-  flex: 1;
-  min-width: 120px;
-  background: rgba(20, 28, 42, 0.85);
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 10px;
-  padding: 4px 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.hud-hp-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.hud-hp-title {
-  color: var(--text-muted);
-  letter-spacing: 0.05em;
-}
-
-.hud-hp-val {
-  font-variant-numeric: tabular-nums;
-  font-size: 11px;
-}
-
-.hud-hp-bar {
-  width: 100%;
-  height: 8px;
-  background: rgba(15, 23, 42, 0.9);
-  border-radius: 999px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  position: relative;
-}
-
-.hud-hp-fill {
-  height: 100%;
-  border-radius: 999px;
-  transition: width 0.18s ease-out;
-}
-
-.player-fill {
-  background: linear-gradient(90deg, #22c55e 0%, #10b981 70%, #fbbf24 100%);
-  box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
-}
-
-.base-fill {
-  background: linear-gradient(90deg, #38bdf8 0%, #2563eb 100%);
-  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
-}
-
-.base-hp-card.critical {
-  border-color: rgba(244, 63, 94, 0.6);
-  animation: baseDangerPulse 0.8s ease-in-out infinite alternate;
-}
-
-.base-hp-card.critical .base-fill {
-  background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
-  box-shadow: 0 0 10px rgba(239, 68, 68, 0.8);
-}
-
-@keyframes baseDangerPulse {
-  from {
-    border-color: rgba(244, 63, 94, 0.4);
-    box-shadow: 0 0 6px rgba(244, 63, 94, 0.2);
-  }
-  to {
-    border-color: rgba(244, 63, 94, 0.9);
-    box-shadow: 0 0 16px rgba(244, 63, 94, 0.65);
-  }
-}
-
-.icon-btn {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  background: rgba(24, 33, 48, 0.88);
-  color: var(--text-main);
-  font-size: 17px;
+.hud-icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(26, 35, 49, 0.9);
+  color: var(--wot-text-main);
+  font-size: 15px;
   cursor: pointer;
   display: grid;
   place-items: center;
-  transition: transform 0.12s, background 0.15s, border-color 0.15s;
+  transition: all 0.15s ease-out;
 }
 
-.icon-btn:hover {
-  background: rgba(38, 52, 74, 0.95);
-  border-color: var(--accent);
+.hud-icon-btn:hover {
+  background: rgba(40, 54, 76, 0.95);
+  border-color: var(--wot-orange);
 }
 
-.icon-btn:active {
+.hud-icon-btn:active {
   transform: scale(0.92);
 }
 
-/* ==========================================================================
-   Boss Health Bar
-   ========================================================================== */
+/* Boss / Duel Champion HP Bar */
 .boss-bar {
-  position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 64px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 20;
-  width: min(440px, calc(100vw - 32px));
-  background: rgba(18, 14, 28, 0.92);
-  border: 1px solid rgba(244, 63, 94, 0.45);
-  border-radius: 12px;
+  width: min(420px, calc(100vw - 40px));
+  background: rgba(24, 18, 30, 0.94);
+  border: 1px solid rgba(239, 68, 68, 0.55);
+  border-radius: 10px;
   padding: 6px 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(244, 63, 94, 0.3);
-  backdrop-filter: blur(8px);
-  pointer-events: none;
-  animation: bossBarFade 0.3s ease-out;
-}
-
-@keyframes bossBarFade {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -10px);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, 0);
-  }
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8), 0 0 16px rgba(239, 68, 68, 0.3);
+  pointer-events: auto;
 }
 
 .boss-bar-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  margin-bottom: 3px;
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.06em;
 }
 
 .boss-name {
   color: #fda4af;
-  text-shadow: 0 0 8px rgba(244, 63, 94, 0.5);
-  font-size: 13px;
-  font-weight: 900;
   letter-spacing: 0.08em;
 }
 
 .boss-hp-text {
   font-variant-numeric: tabular-nums;
-  color: #e2e8f0;
+  color: #cbd5e1;
 }
 
 .boss-hp-track {
   width: 100%;
+  height: 8px;
+  background: rgba(10, 12, 18, 0.9);
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.boss-hp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ef4444 0%, #ec4899 50%, #8b5cf6 100%);
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.65);
+  border-radius: 999px;
+  transition: width 0.15s ease-out;
+}
+
+/* Bottom Left: WoT Tank Panel (Speed, Buffs, Armor Plate HP) */
+.wot-tank-panel {
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom, 8px) + 12px);
+  left: calc(env(safe-area-inset-left, 8px) + 12px);
+  width: min(280px, calc(100vw - 24px));
+  background: var(--wot-armor-panel);
+  border: 1px solid var(--wot-armor-border);
+  border-radius: 12px;
+  padding: 8px 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7), inset 0 1px 0 var(--wot-armor-highlight);
+  pointer-events: auto;
+  backdrop-filter: blur(8px);
+}
+
+.tank-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.tank-name-text {
+  font-size: 13px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 0.04em;
+}
+
+.speedometer {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--wot-text-muted);
+}
+
+.speedometer strong {
+  font-size: 15px;
+  color: var(--wot-green);
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-buffs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.buff-pill {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(56, 189, 248, 0.16);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #bae6fd;
+}
+
+.player-hp-container {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.player-hp-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--wot-text-muted);
+}
+
+.player-hp-text {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+
+.player-hp-track {
+  width: 100%;
   height: 10px;
-  background: rgba(15, 23, 42, 0.9);
+  background: rgba(10, 14, 20, 0.95);
   border-radius: 999px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.boss-hp-fill {
+.player-hp-fill {
   height: 100%;
-  background: linear-gradient(90deg, #ef4444 0%, #ec4899 50%, #a855f7 100%);
-  box-shadow: 0 0 12px rgba(239, 68, 68, 0.6);
+  background: linear-gradient(90deg, #22c55e 0%, #10b981 70%, #f59e0b 100%);
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
   border-radius: 999px;
   transition: width 0.15s ease-out;
 }
 
-/* ==========================================================================
-   Active Buffs & Stage Banner
-   ========================================================================== */
-.buffs-bar {
+/* Bottom Center: Weapon & Consumables Action Bar */
+.wot-action-bar {
   position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 58px);
-  left: 14px;
-  z-index: 19;
+  bottom: calc(env(safe-area-inset-bottom, 8px) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  pointer-events: none;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
 }
 
-.buff-pill {
-  background: rgba(15, 23, 42, 0.88);
-  border: 1px solid rgba(56, 189, 248, 0.45);
-  border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #e0f2fe;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-}
-
-.stage-banner {
-  position: fixed;
-  inset: 0;
-  z-index: 25;
+.action-slot {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  background: rgba(22, 29, 41, 0.92);
+  border: 1.5px solid var(--wot-armor-border);
+  border-radius: 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle, rgba(10, 14, 22, 0.8) 0%, rgba(10, 14, 22, 0.38) 100%);
-  pointer-events: none;
-  animation: fadeBanner 0.25s ease-out;
+  gap: 2px;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+  transition: transform 0.12s, border-color 0.15s, background 0.15s;
 }
 
-@keyframes fadeBanner {
+.action-slot:hover {
+  border-color: var(--wot-orange);
+  background: rgba(30, 40, 56, 0.95);
+}
+
+.action-slot.active {
+  border-color: var(--wot-green);
+  box-shadow: 0 0 14px rgba(0, 255, 133, 0.35);
+}
+
+.slot-key {
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  font-size: 9px;
+  font-weight: 900;
+  color: var(--wot-gold);
+  background: rgba(0, 0, 0, 0.6);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.slot-name {
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+  color: #fff;
+  margin-top: 10px;
+  line-height: 1.1;
+}
+
+.slot-cooldown-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.slot-fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 0%;
+  background: rgba(0, 0, 0, 0.7);
+  transition: height 0.1s linear;
+}
+
+.slot-timer {
+  position: relative;
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--wot-orange);
+  text-shadow: 0 2px 4px #000;
+}
+
+.slot-consumable {
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.slot-sniper {
+  border-color: rgba(0, 255, 133, 0.4);
+}
+
+/* Bottom Right: WoT Minimap */
+.wot-minimap-wrap {
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom, 8px) + 12px);
+  right: calc(env(safe-area-inset-right, 8px) + 12px);
+  width: 168px;
+  height: 168px;
+  background: rgba(12, 16, 22, 0.94);
+  border: 2px solid rgba(94, 120, 150, 0.45);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8);
+  pointer-events: auto;
+}
+
+#minimap-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.minimap-grid-decor {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.grid-coord {
+  position: absolute;
+  font-size: 8px;
+  font-weight: 900;
+  color: rgba(148, 163, 184, 0.55);
+}
+
+.coord-a { top: 2px; left: 4px; }
+.coord-b { top: 2px; left: 50%; transform: translateX(-50%); }
+.coord-c { top: 2px; right: 4px; }
+.coord-1 { top: 4px; left: 2px; }
+.coord-2 { top: 50%; left: 2px; transform: translateY(-50%); }
+.coord-3 { bottom: 4px; left: 2px; }
+
+/* ==========================================================================
+   Touch Controls (WoT Blitz Mobile Scheme)
+   ========================================================================== */
+.touch-controls {
+  position: fixed;
+  inset: 0;
+  z-index: 24;
+  pointer-events: none;
+}
+
+/* Left Movement Joystick */
+.stick-move-zone {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 48vw;
+  height: 52vh;
+  pointer-events: auto;
+}
+
+.stick-move-base {
+  position: absolute;
+  bottom: 34px;
+  left: 34px;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(20, 30, 45, 0.4) 0%, rgba(12, 18, 28, 0.75) 100%);
+  border: 2px solid rgba(148, 163, 184, 0.35);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  touch-action: none;
+}
+
+.stick-outer-ring {
+  position: absolute;
+  inset: 12px;
+  border-radius: 50%;
+  border: 1px dashed rgba(148, 163, 184, 0.25);
+}
+
+.stick-move-knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #38bdf8 0%, #1e40af 100%);
+  border: 2px solid #fff;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.6);
+  pointer-events: none;
+  transition: transform 0.04s linear;
+}
+
+.stick-guide-text {
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--wot-text-muted);
+}
+
+/* Right Touch Look & Aim Zone */
+.touch-look-zone {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 50vw;
+  height: 60vh;
+  pointer-events: auto;
+}
+
+/* Right Action Buttons Cluster */
+.touch-action-cluster {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  pointer-events: auto;
+}
+
+.touch-circle-btn {
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #fff;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.65);
+  touch-action: none;
+}
+
+.btn-fire {
+  width: 84px;
+  height: 84px;
+  background: radial-gradient(circle, #ff9800 0%, #c2410c 70%, #7c2d12 100%);
+  border-color: #fde047;
+  box-shadow: 0 0 24px var(--wot-orange-glow);
+}
+
+.btn-fire:active {
+  transform: scale(0.92);
+}
+
+.fire-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.fire-text {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.btn-sniper {
+  width: 58px;
+  height: 58px;
+  background: rgba(18, 32, 26, 0.92);
+  border-color: var(--wot-green);
+}
+
+.btn-repair {
+  width: 54px;
+  height: 54px;
+  background: rgba(22, 32, 48, 0.92);
+  border-color: #38bdf8;
+}
+
+.touch-btn-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.touch-btn-sub {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.touch-pill-btn {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--wot-armor-border);
+  background: rgba(20, 27, 38, 0.9);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.touch-pill-btn.active {
+  border-color: var(--wot-green);
+  background: rgba(0, 255, 133, 0.18);
+}
+
+/* ==========================================================================
+   3D Hangar Screen (World of Tanks Garage)
+   ========================================================================== */
+.hangar-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 28;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+/* Turntable Orbit Background (Click/Drag anywhere in Hangar center to rotate tank!) */
+.hangar-orbit-zone {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.hangar-orbit-zone:active {
+  cursor: grabbing;
+}
+
+/* Hangar Top Bar */
+.hangar-top-bar {
+  position: relative;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: linear-gradient(180deg, rgba(10, 14, 20, 0.96) 0%, rgba(10, 14, 20, 0.75) 85%, transparent 100%);
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+}
+
+.hangar-branding {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hangar-logo {
+  font-size: clamp(20px, 3vw, 28px);
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  color: #fff;
+  line-height: 1;
+}
+
+.hangar-logo span {
+  color: var(--wot-orange);
+}
+
+.wot-edition {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  color: var(--wot-gold);
+  background: rgba(251, 191, 36, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  padding: 1px 6px;
+  border-radius: 4px;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
+.offline-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: #86efac;
+}
+
+/* Iconic WoT Battle Buttons in Header Center */
+.hangar-battle-buttons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.wot-main-battle-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 220px;
+  padding: 10px 24px;
+  border-radius: 12px;
+  border: 2px solid #fed7aa;
+  background: linear-gradient(180deg, #ff9e1f 0%, #e85d04 55%, #bd3a00 100%);
+  box-shadow: 0 6px 26px var(--wot-orange-glow), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  color: #fff;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform 0.12s, box-shadow 0.15s, filter 0.15s;
+}
+
+.wot-main-battle-btn:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+  box-shadow: 0 10px 32px rgba(255, 152, 0, 0.65);
+}
+
+.wot-main-battle-btn:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+.battle-btn-title {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+.battle-btn-sub {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  opacity: 0.95;
+}
+
+.wot-duel-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 170px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(239, 68, 68, 0.5);
+  background: linear-gradient(180deg, rgba(48, 20, 30, 0.95) 0%, rgba(28, 12, 18, 0.98) 100%);
+  color: #fecdd3;
+  cursor: pointer;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+  transition: all 0.15s ease-out;
+}
+
+.wot-duel-btn:hover {
+  border-color: #ef4444;
+  background: rgba(64, 24, 38, 0.95);
+  transform: translateY(-2px);
+}
+
+.wot-duel-btn:active {
+  transform: translateY(1px);
+}
+
+/* Hangar Top Right Stats */
+.hangar-top-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hangar-currency-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(22, 29, 41, 0.9);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 999px;
+  padding: 6px 14px;
+}
+
+.coin-icon {
+  font-size: 16px;
+}
+
+.coin-amount {
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--wot-gold);
+}
+
+.hangar-records-box {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+}
+
+.rec-label {
+  color: var(--wot-text-muted);
+}
+
+.record-item strong {
+  color: #fff;
+  margin-left: 4px;
+}
+
+.hangar-quick-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hangar-tool-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--wot-armor-border);
+  background: rgba(24, 32, 45, 0.9);
+  color: #fff;
+  font-size: 15px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: all 0.15s ease-out;
+}
+
+.hangar-tool-btn:hover {
+  background: rgba(38, 50, 70, 0.95);
+  border-color: var(--wot-orange);
+}
+
+.hangar-install-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(34, 197, 94, 0.5);
+  background: rgba(34, 197, 94, 0.15);
+  color: #86efac;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* Sub-header Bar: Test-Drive & Map Selector */
+.hangar-sub-bar {
+  position: relative;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 20px;
+  pointer-events: auto;
+}
+
+.test-drive-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1.5px solid var(--wot-cyan);
+  background: rgba(12, 24, 38, 0.88);
+  color: #e0f2fe;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.25);
+  transition: all 0.15s ease-out;
+}
+
+.test-drive-toggle-btn:hover {
+  background: rgba(16, 36, 58, 0.95);
+  box-shadow: 0 0 24px var(--wot-cyan-glow);
+}
+
+.test-drive-led {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #64748b;
+}
+
+.test-drive-toggle-btn.active .test-drive-led {
+  background: var(--wot-cyan);
+  box-shadow: 0 0 8px var(--wot-cyan);
+}
+
+.map-selector-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.map-select-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--wot-armor-border);
+  background: rgba(20, 27, 38, 0.82);
+  color: var(--wot-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.map-select-btn:hover {
+  color: #fff;
+  background: rgba(30, 42, 58, 0.9);
+}
+
+.map-select-btn.active {
+  border-color: var(--wot-orange);
+  background: rgba(255, 152, 0, 0.15);
+  color: #fed7aa;
+}
+
+/* Right Side: Tank Info & Upgrade Card */
+.hangar-tank-card {
+  position: fixed;
+  top: 110px;
+  right: 20px;
+  width: min(340px, calc(100vw - 32px));
+  max-height: calc(100vh - 250px);
+  overflow-y: auto;
+  z-index: 15;
+  background: var(--wot-armor-panel);
+  border: 1px solid var(--wot-armor-border);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75), inset 0 1px 0 var(--wot-armor-highlight);
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+}
+
+.tank-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.tier-and-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hangar-tier-badge {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.25) 0%, rgba(217, 119, 6, 0.15) 100%);
+  border: 2px solid var(--wot-gold);
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--wot-gold);
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.3);
+}
+
+.hangar-tank-title {
+  font-size: 18px;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1.1;
+}
+
+.hangar-tank-class {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--wot-text-muted);
+}
+
+.btn-unlock-tank {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1.5px solid var(--wot-gold);
+  background: linear-gradient(180deg, #d97706 0%, #92400e 100%);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(217, 119, 6, 0.5);
+}
+
+.hangar-tank-desc {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--wot-text-muted);
+  margin-bottom: 12px;
+}
+
+.hangar-weapons-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(14, 20, 28, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-bottom: 14px;
+}
+
+.weapon-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.w-slot {
+  color: var(--wot-gold);
+  min-width: 20px;
+}
+
+.w-name {
+  color: #fff;
+  flex: 1;
+  margin: 0 6px;
+}
+
+.w-dmg {
+  color: var(--wot-green);
+}
+
+.upgrades-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.upgrades-title {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--wot-text-muted);
+  margin-bottom: 2px;
+}
+
+.upgrades-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.upgrade-card-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: rgba(20, 27, 38, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.upgrade-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.upgrade-name {
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.upgrade-level-dots {
+  display: flex;
+  gap: 3px;
+}
+
+.upgrade-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(148, 163, 184, 0.25);
+}
+
+.upgrade-dot.filled {
+  background: var(--wot-orange);
+  box-shadow: 0 0 6px var(--wot-orange-glow);
+}
+
+.btn-upgrade-action {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--wot-gold);
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--wot-gold);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.btn-upgrade-action:hover {
+  background: rgba(251, 191, 36, 0.3);
+}
+
+.btn-upgrade-action:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Bottom WoT Tank Carousel */
+.hangar-carousel-wrap {
+  position: relative;
+  z-index: 15;
+  padding: 10px 20px 14px;
+  background: linear-gradient(0deg, rgba(8, 11, 16, 0.98) 0%, rgba(10, 14, 20, 0.8) 75%, transparent 100%);
+  pointer-events: auto;
+}
+
+.carousel-caption {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.carousel-title {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  color: var(--wot-gold);
+}
+
+.carousel-hint {
+  font-size: 10px;
+  color: var(--wot-text-muted);
+}
+
+.tank-carousel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.tank-carousel-slot {
+  position: relative;
+  min-width: 140px;
+  height: 74px;
+  background: rgba(20, 27, 38, 0.9);
+  border: 1.5px solid var(--wot-armor-border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.15s ease-out;
+}
+
+.tank-carousel-slot:hover {
+  border-color: var(--wot-orange);
+  background: rgba(30, 40, 56, 0.95);
+  transform: translateY(-2px);
+}
+
+.tank-carousel-slot.active {
+  border-color: var(--wot-gold);
+  background: linear-gradient(135deg, rgba(30, 42, 60, 0.95) 0%, rgba(45, 30, 18, 0.95) 100%);
+  box-shadow: 0 0 16px rgba(251, 191, 36, 0.35);
+}
+
+.tank-carousel-slot.locked {
+  opacity: 0.65;
+  filter: grayscale(0.6);
+}
+
+.slot-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.slot-tier-tag {
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--wot-gold);
+}
+
+.slot-tank-label {
+  font-size: 13px;
+  font-weight: 900;
+  color: #fff;
+}
+
+.slot-tank-sub {
+  font-size: 9px;
+  color: var(--wot-text-muted);
+}
+
+/* ==========================================================================
+   Modals (Pause & Result Windows)
+   ========================================================================== */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(8, 12, 18, 0.75);
+  backdrop-filter: blur(8px);
+}
+
+.wot-dialog-box {
+  width: 100%;
+  max-width: 440px;
+  background: var(--wot-armor-panel);
+  border: 1.5px solid var(--wot-armor-border);
+  border-radius: 20px;
+  padding: 24px 22px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8), inset 0 1px 0 var(--wot-armor-highlight);
+  text-align: center;
+  animation: modalPop 0.2s ease-out;
+}
+
+@keyframes modalPop {
   from {
     opacity: 0;
     transform: scale(0.94);
@@ -512,947 +1793,212 @@ body,
   }
 }
 
-.stage-banner-sub {
-  font-size: 12px;
-  letter-spacing: 0.22em;
-  color: var(--accent);
-  font-weight: 700;
-  margin-bottom: 6px;
+.dialog-header {
+  margin-bottom: 12px;
 }
 
-.stage-banner-title {
-  font-size: clamp(34px, 7vw, 56px);
+.dialog-title {
+  font-size: 26px;
   font-weight: 900;
-  color: var(--gold);
-  text-shadow: 0 4px 24px rgba(251, 191, 36, 0.45);
   letter-spacing: 0.06em;
-}
-
-.stage-banner-name {
-  font-size: 16px;
-  color: var(--text-main);
-  margin-top: 4px;
-  opacity: 0.9;
-}
-
-/* ==========================================================================
-   Overlay Panels & Main Menu
-   ========================================================================== */
-.overlay-screen {
-  position: fixed;
-  inset: 0;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  background: radial-gradient(circle at center, rgba(12, 17, 28, 0.65) 0%, rgba(7, 10, 16, 0.88) 100%);
-  backdrop-filter: blur(6px);
-}
-
-.panel {
-  width: 100%;
-  max-width: 480px;
-  background: var(--panel-bg);
-  border: 1px solid var(--panel-border);
-  border-radius: 22px;
-  padding: 22px 20px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  text-align: center;
-}
-
-.compact-panel {
-  max-width: 420px;
-}
-
-.badge-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.menu-top-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.pwa-badge {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: rgba(34, 197, 94, 0.14);
-  border: 1px solid rgba(34, 197, 94, 0.4);
-  color: #86efac;
-}
-
-.coin-pill {
-  font-size: 12px;
-  font-weight: 800;
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: rgba(251, 191, 36, 0.15);
-  border: 1px solid rgba(251, 191, 36, 0.45);
-  color: var(--gold);
-}
-
-.mini-pill-btn {
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  background: rgba(30, 41, 59, 0.75);
-  color: var(--text-main);
-  cursor: pointer;
-}
-
-.game-title {
-  font-size: clamp(32px, 7vw, 44px);
-  font-weight: 900;
-  letter-spacing: 0.04em;
-  line-height: 1.05;
   color: #fff;
-  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
-.game-title span {
-  color: var(--gold);
+.dialog-title.result-headline {
+  color: var(--wot-gold);
+  text-shadow: 0 0 20px rgba(251, 191, 36, 0.4);
 }
 
-.game-subtitle {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  color: var(--text-muted);
-  margin: 4px 0 14px;
+.dialog-subtitle {
+  font-size: 12px;
+  color: var(--wot-text-muted);
+  margin-top: 2px;
 }
 
-/* Mode Switcher Tabs */
-.mode-tabs {
+.dialog-divider {
+  width: 60px;
+  height: 2px;
+  background: var(--wot-orange);
+  margin: 10px auto 0;
+  border-radius: 999px;
+}
+
+.dialog-desc {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--wot-text-muted);
+  margin-bottom: 20px;
+}
+
+.dialog-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wot-btn {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.15s ease-out;
+}
+
+.wot-btn.btn-primary {
+  border: 1.5px solid #fed7aa;
+  background: linear-gradient(180deg, #ff9e1f 0%, #e85d04 55%, #bd3a00 100%);
+  color: #fff;
+  box-shadow: 0 4px 18px var(--wot-orange-glow);
+}
+
+.wot-btn.btn-primary:hover {
+  filter: brightness(1.1);
+  transform: translateY(-2px);
+}
+
+.wot-btn.btn-secondary {
+  border: 1px solid var(--wot-armor-border);
+  background: rgba(28, 38, 54, 0.85);
+  color: #fff;
+}
+
+.wot-btn.btn-secondary:hover {
+  background: rgba(40, 54, 76, 0.95);
+  border-color: var(--wot-orange);
+}
+
+.wot-btn.btn-danger {
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  background: rgba(40, 16, 24, 0.85);
+  color: #fda4af;
+}
+
+.wot-btn.btn-danger:hover {
+  background: rgba(56, 20, 32, 0.95);
+  border-color: #ef4444;
+}
+
+.result-stats-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 18px;
 }
 
-.mode-tab {
-  padding: 10px 12px;
-  font-size: 13px;
-  font-weight: 800;
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  background: rgba(24, 33, 48, 0.75);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.15s ease-out;
-}
-
-.mode-tab:hover {
-  background: rgba(38, 52, 74, 0.85);
-  color: var(--text-main);
-}
-
-.mode-tab.active {
-  background: linear-gradient(135deg, rgba(56, 189, 248, 0.22) 0%, rgba(37, 99, 235, 0.28) 100%);
-  border-color: var(--accent);
-  color: #e0f2fe;
-  box-shadow: 0 0 14px rgba(56, 189, 248, 0.32);
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-bottom: 14px;
-}
-
-.stats-grid.two-cols {
-  grid-template-columns: repeat(2, 1fr);
-}
-
-.stat-box {
-  background: rgba(15, 23, 42, 0.72);
-  border: 1px solid rgba(148, 163, 184, 0.15);
-  border-radius: 12px;
-  padding: 8px 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.stat-box-label {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-}
-
-.stat-box-val {
-  font-size: 17px;
-  font-weight: 800;
-}
-
-/* Campaign Stage Selector & Horde Info Box */
-.stage-selector {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid rgba(56, 189, 248, 0.25);
-  border-radius: 14px;
+.res-stat-card {
+  background: rgba(14, 20, 28, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 10px;
   padding: 8px 10px;
-  margin-bottom: 12px;
-}
-
-.stage-selector-info {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.stage-selector-label {
-  font-size: 9px;
-  letter-spacing: 0.1em;
-  color: var(--accent);
-  font-weight: 700;
+.res-stat-card.full-span {
+  grid-column: span 2;
 }
 
-#menu-selected-stage {
-  font-size: 13px;
-}
-
-.stage-nav-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  background: rgba(30, 41, 59, 0.85);
-  color: var(--text-main);
-  font-size: 14px;
-  cursor: pointer;
-}
-
-.stage-nav-btn:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-
-.horde-info-box {
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.35);
-  border-radius: 14px;
-  padding: 10px 12px;
-  margin-bottom: 12px;
-  text-align: left;
-  font-size: 12px;
-  line-height: 1.45;
-  color: #fecdd3;
-}
-
-.horde-info-badge {
-  display: inline-block;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(239, 68, 68, 0.25);
-  color: #fda4af;
-  margin-bottom: 4px;
-}
-
-/* Selected Tank Card */
-.current-tank-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  background: rgba(15, 23, 42, 0.78);
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 14px;
-  padding: 8px 12px;
-  margin-bottom: 14px;
-}
-
-.current-tank-info {
-  display: flex;
-  flex-direction: column;
-  text-align: left;
-  gap: 2px;
-}
-
-.current-tank-label {
+.res-stat-label {
   font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--text-muted);
+  color: var(--wot-text-muted);
 }
 
-.current-tank-name {
-  font-size: 13px;
-  color: var(--gold);
-}
-
-.hangar-btn {
-  padding: 8px 12px;
-  border-radius: 10px;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-  background: linear-gradient(135deg, rgba(56, 189, 248, 0.2) 0%, rgba(251, 191, 36, 0.22) 100%);
-  border: 1px solid rgba(56, 189, 248, 0.45);
-  color: #fff;
-  transition: transform 0.12s, filter 0.15s;
-}
-
-.hangar-btn:hover {
-  filter: brightness(1.15);
-  border-color: var(--gold);
-}
-
-.hangar-btn:active {
-  transform: scale(0.96);
-}
-
-/* Standard Buttons */
-.menu-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.primary-btn,
-.secondary-btn,
-.danger-btn,
-.install-btn {
-  width: 100%;
-  padding: 13px 18px;
-  border-radius: 14px;
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  cursor: pointer;
-  border: none;
-  transition: transform 0.12s, filter 0.15s;
-}
-
-.primary-btn {
-  background: linear-gradient(135deg, #fbbf24 0%, #ea580c 100%);
-  color: #111827;
-  box-shadow: 0 8px 22px rgba(234, 88, 12, 0.38);
-}
-
-.install-btn {
-  background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
-  color: #fff;
-  font-size: 13px;
-  padding: 10px 16px;
-}
-
-.secondary-btn {
-  background: rgba(30, 41, 59, 0.9);
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  color: var(--text-main);
-  font-size: 14px;
-}
-
-.danger-btn {
-  background: rgba(244, 63, 94, 0.16);
-  border: 1px solid rgba(244, 63, 94, 0.42);
-  color: #fda4af;
-  font-size: 14px;
-}
-
-.primary-btn:hover,
-.secondary-btn:hover,
-.danger-btn:hover,
-.install-btn:hover {
-  filter: brightness(1.08);
-}
-
-.primary-btn:active,
-.secondary-btn:active,
-.danger-btn:active,
-.install-btn:active {
-  transform: scale(0.97);
-}
-
-.controls-hint {
-  margin-top: 14px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(148, 163, 184, 0.14);
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--text-muted);
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-/* ==========================================================================
-   3D Hangar Screen (Live 3D Turntable View + Non-covering Side/Bottom Panel)
-   ========================================================================== */
-.hangar-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 30;
-  pointer-events: none;
-  display: flex;
-}
-
-.hangar-layout {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  justify-content: space-between;
-  pointer-events: none;
-}
-
-.hangar-stage-area {
-  flex: 1;
-  pointer-events: none;
-  display: flex;
-  align-items: flex-start;
-  padding: calc(env(safe-area-inset-top, 0px) + 20px) 24px;
-}
-
-.hangar-stage-badge {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.7);
-  border: 1px solid rgba(56, 189, 248, 0.3);
-  color: #bae6fd;
-  backdrop-filter: blur(4px);
-}
-
-.hangar-panel {
-  width: 440px;
-  max-width: 100%;
-  height: 100%;
-  background: var(--panel-bg);
-  border-left: 1px solid var(--panel-border);
-  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(10px);
-  padding: calc(env(safe-area-inset-top, 0px) + 16px) 20px calc(env(safe-area-inset-bottom, 0px) + 20px);
-  overflow-y: auto;
-  pointer-events: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.hangar-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.secondary-pill-btn {
-  font-size: 12px;
-  font-weight: 700;
-  padding: 6px 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  background: rgba(30, 41, 59, 0.85);
-  color: var(--text-main);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.secondary-pill-btn:hover {
-  background: rgba(51, 65, 85, 0.9);
-}
-
-.hangar-coins-pill {
-  font-size: 14px;
-  font-weight: 800;
-  padding: 5px 14px;
-  border-radius: 999px;
-  background: rgba(251, 191, 36, 0.15);
-  border: 1px solid rgba(251, 191, 36, 0.45);
-  color: var(--gold);
-}
-
-/* Hangar Class Selection Tabs */
-.hangar-class-tabs {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-}
-
-.hangar-class-tab {
-  padding: 8px 4px;
-  font-size: 11px;
-  font-weight: 800;
-  border-radius: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  background: rgba(20, 28, 42, 0.75);
-  color: var(--text-muted);
-  cursor: pointer;
-  text-align: center;
-  transition: all 0.15s ease-out;
-}
-
-.hangar-class-tab:hover {
-  background: rgba(30, 41, 59, 0.9);
-  color: var(--text-main);
-}
-
-.hangar-class-tab.active {
-  background: linear-gradient(135deg, rgba(56, 189, 248, 0.25) 0%, rgba(37, 99, 235, 0.3) 100%);
-  border-color: var(--accent);
-  color: #fff;
-  box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
-}
-
-/* Hangar Tank Details */
-.hangar-tank-details {
-  background: rgba(15, 23, 42, 0.75);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 14px;
-  padding: 12px 14px;
-  text-align: left;
-}
-
-.hangar-title-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-
-.hangar-tank-name {
+.res-stat-val {
   font-size: 18px;
   font-weight: 900;
   color: #fff;
 }
 
-.hangar-tank-sub {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--accent);
+.res-stat-val.gold {
+  color: var(--wot-gold);
 }
 
-.hangar-action-btn {
-  padding: 8px 14px;
-  border-radius: 10px;
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
-  border: none;
-  background: linear-gradient(135deg, #fbbf24 0%, #ea580c 100%);
-  color: #111827;
-  transition: transform 0.12s, filter 0.15s;
+.res-stat-val.accent {
+  color: var(--wot-cyan);
 }
 
-.hangar-action-btn.selected {
-  background: rgba(34, 197, 94, 0.2);
-  border: 1px solid rgba(34, 197, 94, 0.5);
-  color: #86efac;
-  cursor: default;
-}
-
-.hangar-tank-desc {
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--text-muted);
-}
-
-.hangar-section-title {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  color: var(--text-muted);
-  text-align: left;
-  margin-top: 4px;
-}
-
-/* Upgrades List */
-.hangar-upgrades-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.upgrade-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  background: rgba(15, 23, 42, 0.65);
-  border: 1px solid rgba(148, 163, 184, 0.15);
-  border-radius: 12px;
-  padding: 8px 12px;
-}
-
-.upgrade-stat-info {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  flex: 1;
-}
-
-.upgrade-stat-name {
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.upgrade-pips {
-  display: flex;
-  gap: 4px;
-}
-
-.upgrade-pip {
-  width: 14px;
-  height: 6px;
-  border-radius: 2px;
-  background: rgba(148, 163, 184, 0.2);
-}
-
-.upgrade-pip.filled {
-  background: linear-gradient(90deg, #38bdf8, #fbbf24);
-  box-shadow: 0 0 6px rgba(56, 189, 248, 0.4);
-}
-
-.upgrade-btn {
-  padding: 7px 12px;
-  border-radius: 8px;
-  font-size: 11px;
-  font-weight: 800;
-  cursor: pointer;
-  border: 1px solid rgba(251, 191, 36, 0.4);
-  background: rgba(251, 191, 36, 0.15);
-  color: var(--gold);
-  white-space: nowrap;
-  transition: transform 0.1s, background 0.15s;
-}
-
-.upgrade-btn:hover:not(:disabled) {
-  background: rgba(251, 191, 36, 0.28);
-}
-
-.upgrade-btn:disabled {
-  opacity: 0.4;
-  cursor: default;
-  border-color: rgba(148, 163, 184, 0.2);
-  color: var(--text-muted);
-  background: rgba(20, 28, 42, 0.5);
-}
-
-/* Base Fortification Card */
-.hangar-base-card {
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid rgba(56, 189, 248, 0.25);
-  border-radius: 14px;
-  padding: 10px 14px;
-}
-
-.hangar-base-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  text-align: left;
-}
-
-.hangar-base-title {
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--accent);
-}
-
-.hangar-base-info {
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-top: 2px;
-}
-
-/* Responsive Hangar on Mobile Devices */
-@media (max-width: 768px) {
-  .hangar-layout {
-    flex-direction: column;
-    justify-content: flex-end;
+/* ==========================================================================
+   Responsive Adaptations (Mobile to 4K Ultra-wide)
+   ========================================================================== */
+@media (max-width: 900px) {
+  .hangar-top-bar {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 8px 12px;
   }
-  .hangar-stage-area {
-    height: 36vh;
-    min-height: 160px;
-    flex: none;
-    padding: 12px 14px;
-  }
-  .hangar-stage-badge {
-    font-size: 9px;
-    padding: 4px 10px;
-  }
-  .hangar-panel {
+
+  .hangar-battle-buttons {
+    order: 3;
     width: 100%;
-    height: 64vh;
-    max-height: 64vh;
-    border-left: none;
-    border-top: 1px solid var(--panel-border);
-    border-top-left-radius: 22px;
-    border-top-right-radius: 22px;
-    padding: 14px;
-    box-shadow: 0 -12px 30px rgba(0, 0, 0, 0.7);
+    justify-content: center;
+  }
+
+  .wot-main-battle-btn {
+    min-width: 160px;
+    padding: 8px 16px;
+  }
+
+  .wot-duel-btn {
+    min-width: 140px;
+    padding: 8px 14px;
+  }
+
+  .hangar-tank-card {
+    position: fixed;
+    top: auto;
+    bottom: 120px;
+    right: 12px;
+    width: calc(100vw - 24px);
+    max-height: 40vh;
   }
 }
 
-/* ==========================================================================
-   Modals (Pause, Victory, Game Over)
-   ========================================================================== */
-.modal-title {
-  font-size: 26px;
-  font-weight: 900;
-  margin-bottom: 6px;
-}
-
-.modal-desc {
-  font-size: 14px;
-  color: var(--text-muted);
-  margin-bottom: 14px;
-}
-
-.victory-tag,
-.gameover-tag {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  padding: 4px 10px;
-  border-radius: 999px;
-  margin-bottom: 8px;
-}
-
-.victory-tag {
-  background: rgba(34, 197, 94, 0.16);
-  color: #86efac;
-  border: 1px solid rgba(34, 197, 94, 0.35);
-}
-
-.gameover-tag {
-  background: rgba(244, 63, 94, 0.16);
-  color: #fda4af;
-  border: 1px solid rgba(244, 63, 94, 0.35);
-}
-
-.new-record {
-  margin-bottom: 12px;
-  padding: 6px 12px;
-  border-radius: 10px;
-  background: rgba(251, 191, 36, 0.16);
-  border: 1px solid rgba(251, 191, 36, 0.45);
-  color: var(--gold);
-  font-weight: 800;
-  font-size: 13px;
-}
-
-.score-breakdown {
-  background: rgba(15, 23, 42, 0.72);
-  border-radius: 12px;
-  padding: 10px 14px;
-  margin: 10px 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 13px;
-}
-
-.breakdown-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px dashed rgba(148, 163, 184, 0.14);
-  padding-bottom: 4px;
-}
-
-.breakdown-row:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.reward-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 14px;
-  padding: 4px 6px;
-  margin-bottom: 6px;
-  border-radius: 8px;
-  background: rgba(251, 191, 36, 0.1);
-  border: 1px solid rgba(251, 191, 36, 0.25);
-}
-
-.total-score-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 16px;
-  margin-bottom: 14px;
-  padding: 0 4px;
-}
-
-/* ==========================================================================
-   Mobile Twin-Stick Controls (Left Move Stick + Right Brawl Stars Aim Stick)
-   ========================================================================== */
-.touch-controls {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: env(safe-area-inset-bottom, 0px);
-  z-index: 22;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  padding: 16px 24px 24px;
-  pointer-events: none;
-}
-
-.stick-zone {
-  pointer-events: auto;
-}
-
-.stick-base {
-  position: relative;
-  width: 144px;
-  height: 144px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(30, 41, 59, 0.65) 0%, rgba(15, 23, 42, 0.8) 100%);
-  border: 2px solid rgba(148, 163, 184, 0.3);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
-  touch-action: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.stick-ring {
-  position: absolute;
-  inset: 12px;
-  border-radius: 50%;
-  border: 1px dashed rgba(148, 163, 184, 0.25);
-  pointer-events: none;
-}
-
-.stick-label {
-  position: absolute;
-  bottom: 14px;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.4);
-  pointer-events: none;
-}
-
-.stick-knob {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 52px;
-  height: 52px;
-  margin-left: -26px;
-  margin-top: -26px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.5);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
-  pointer-events: none;
-  transition: transform 0.04s linear;
-}
-
-/* Left Move Stick Knob */
-.move-stick-knob {
-  background: radial-gradient(circle at 35% 35%, #fbbf24 0%, #b45309 100%);
-}
-
-/* Right Aim Stick (Brawl Stars style) */
-.aim-stick-base {
-  border-color: rgba(251, 113, 133, 0.4);
-  background: radial-gradient(circle, rgba(45, 20, 30, 0.65) 0%, rgba(20, 10, 16, 0.82) 100%);
-}
-
-.aim-stick-base.active {
-  border-color: #f43f5e;
-  box-shadow: 0 0 24px rgba(244, 63, 94, 0.55), inset 0 0 16px rgba(244, 63, 94, 0.25);
-}
-
-.aim-ring {
-  border-color: rgba(244, 63, 94, 0.3);
-}
-
-.aim-stick-knob {
-  background: radial-gradient(circle at 35% 30%, #fb7185 0%, #e11d48 65%, #9f1239 100%);
-  border-color: rgba(254, 202, 202, 0.7);
-}
-
-.aim-stick-base.active .aim-stick-knob {
-  box-shadow: 0 0 18px rgba(244, 63, 94, 0.8);
-  filter: brightness(1.15);
-}
-
-/* ==========================================================================
-   Media Queries & Responsiveness
-   ========================================================================== */
-@media (max-width: 640px) {
-  .hide-xs {
-    display: none !important;
+@media (max-width: 600px) {
+  .hud-top-bar {
+    padding: 4px 8px 10px;
   }
-  .hud {
-    padding: 6px 8px;
-    gap: 4px;
-  }
-  .hud-group,
-  .hud-actions {
-    gap: 4px;
-  }
-  .hud-stat {
+
+  .hud-stat-box {
     min-width: 44px;
-    padding: 3px 6px;
+    padding: 2px 6px;
   }
-  .hud-value {
-    font-size: 13px;
+
+  .wot-tank-panel {
+    width: calc(100vw - 24px);
+    bottom: 80px;
   }
-  .hud-bars-group {
+
+  .wot-action-bar {
+    bottom: 12px;
     gap: 6px;
-    margin: 0 2px;
   }
-  .hud-hp-card {
-    min-width: 88px;
-    padding: 3px 6px;
+
+  .action-slot {
+    width: 50px;
+    height: 50px;
   }
-  .hud-hp-title {
-    font-size: 9px;
+
+  .wot-minimap-wrap {
+    width: 120px;
+    height: 120px;
+    top: 60px;
+    bottom: auto;
   }
-  .hud-hp-val {
-    font-size: 10px;
+
+  .stick-move-base {
+    bottom: 20px;
+    left: 20px;
+    width: 120px;
+    height: 120px;
   }
-  .hud-hp-bar {
-    height: 6px;
-  }
-  .icon-btn {
-    width: 32px;
-    height: 32px;
-    font-size: 14px;
-    border-radius: 8px;
-  }
-  .stick-base {
-    width: 126px;
-    height: 126px;
-  }
-  .stick-knob {
-    width: 46px;
-    height: 46px;
-    margin-left: -23px;
-    margin-top: -23px;
-  }
-  .touch-controls {
-    padding: 10px 14px 14px;
+
+  .btn-fire {
+    width: 72px;
+    height: 72px;
   }
 }

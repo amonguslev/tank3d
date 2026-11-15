@@ -24,9 +24,9 @@ export default defineConfig({
         'maskable-icon-512x512.png'
       ],
       manifest: {
-        name: 'Танчики 3D — Battle City',
-        short_name: 'Танчики 3D',
-        description: 'Класична танкова битва Battle City у 3D! Захищай штаб, трощи стіни, збирай бонуси та грай офлайн.',
+        name: 'Танчики 3D — World of Tanks Edition',
+        short_name: 'Танчики WoT 3D',
+        description: 'Танкові 3D-бої у стилі World of Tanks! Снайперський приціл, 5 рівнів танків із двобаштовим Електро-Левіафаном, нескінченні хвилі та дуелі 1 на 1.',
         theme_color: '#11161f',
         background_color: '#0a0d13',
         display: 'standalone',

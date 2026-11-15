@@ -2,25 +2,29 @@ import './style.css';
 import { registerSW } from 'virtual:pwa-register';
 import { SoundEngine } from './audio';
 import {
-  computeBaseMaxHp,
-  getBaseUpgradeCost,
+  computeTankStats,
   getUpgradeCost,
+  MAP_DEFINITIONS,
+  MAP_ORDER,
   MAX_UPGRADE_LEVEL,
-  TANK_CLASS_ORDER,
-  TANK_CLASSES
+  TANK_SPECS,
+  TANK_TIER_ORDER
 } from './classes';
-import { TankGame3D } from './game';
+import {
+  TankGame3D,
+  type EnemyPlateScreenItem,
+  type TankGameCallbacks,
+  type TurretAimScreenOffset
+} from './game';
 import { InputManager } from './input';
-import { getStageInfo } from './levels';
 import { StorageManager } from './storage';
 import type {
-  CameraMode,
+  BattleSummary,
   FloatingTextItem,
   GameModeKind,
   HudState,
-  RadarIndicator,
-  StageKills,
-  TankClassId,
+  MapBiomeId,
+  TankTierId,
   TankUpgradeLevels
 } from './types';
 
@@ -29,711 +33,1114 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
-// Singletons
+type ScreenMode = 'hangar' | 'battle' | 'pause' | 'result';
+
+// ============================================================================
+// Core Singletons
+// ============================================================================
+
 const storage = new StorageManager();
 const sound = new SoundEngine(storage.getData().muted);
 const input = new InputManager();
 
+// Unlock Web Audio on first user interaction anywhere
 input.onAnyInteraction = () => {
   sound.unlock();
 };
 
 // ============================================================================
-// DOM Elements
+// DOM References
 // ============================================================================
 
 const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
-const radarLayerEl = document.getElementById('radar-layer')!;
-const floatingLayerEl = document.getElementById('floating-layer')!;
 
-// HUD
-const hudEl = document.getElementById('hud')!;
-const hudStageLabel = document.getElementById('hud-stage-label')!;
-const hudStage = document.getElementById('hud-stage')!;
-const hudEnemies = document.getElementById('hud-enemies')!;
-const hudLives = document.getElementById('hud-lives')!;
-const hudCoins = document.getElementById('hud-coins')!;
-const hudScore = document.getElementById('hud-score')!;
-const hudBest = document.getElementById('hud-best')!;
-const hudStars = document.getElementById('hud-stars')!;
+// Overlays
+const enemyPlatesContainer = document.getElementById('enemy-plates') as HTMLElement;
+const floatingTextsContainer = document.getElementById('floating-texts') as HTMLElement;
 
-// Health cards
-const hudPlayerHpText = document.getElementById('hud-player-hp-text')!;
-const hudPlayerHpFill = document.getElementById('hud-player-hp-fill')!;
-const hudBaseCard = document.getElementById('hud-base-card')!;
-const hudBaseHpText = document.getElementById('hud-base-hp-text')!;
-const hudBaseHpFill = document.getElementById('hud-base-hp-fill')!;
+// Reticles & Aim Overlays
+const arcadeReticleEl = document.getElementById('arcade-reticle') as HTMLElement;
+const turretAimRingEl = document.getElementById('turret-aim-ring') as HTMLElement;
+const reticleReloadTextEl = document.getElementById('reticle-reload-text') as HTMLElement;
+const targetInfoEl = document.getElementById('target-info') as HTMLElement;
+const targetNameEl = document.getElementById('target-name') as HTMLElement;
+const targetHpFillEl = document.getElementById('target-hp-fill') as HTMLElement;
+const targetHpTextEl = document.getElementById('target-hp-text') as HTMLElement;
 
-// Boss Bar
-const bossBarEl = document.getElementById('boss-bar')!;
-const bossNameEl = document.getElementById('boss-name')!;
-const bossHpTextEl = document.getElementById('boss-hp-text')!;
-const bossHpFillEl = document.getElementById('boss-hp-fill')!;
+// Sniper Overlay
+const sniperOverlayEl = document.getElementById('sniper-overlay') as HTMLElement;
+const sniperDistanceEl = document.getElementById('sniper-distance') as HTMLElement;
+const sniperZoomLabelEl = document.getElementById('sniper-zoom-label') as HTMLElement;
+const sniperWeaponLabelEl = document.getElementById('sniper-weapon-label') as HTMLElement;
+const sniperReloadFillEl = document.getElementById('sniper-reload-fill') as HTMLElement;
+const sniperReloadTextEl = document.getElementById('sniper-reload-text') as HTMLElement;
 
-// Buffs & Stage Banner
-const buffsBarEl = document.getElementById('buffs-bar')!;
-const stageBannerEl = document.getElementById('stage-banner')!;
-const stageBannerSub = document.getElementById('stage-banner-sub')!;
-const stageBannerTitle = document.getElementById('stage-banner-title')!;
-const stageBannerName = document.getElementById('stage-banner-name')!;
+// Pointer Hint & Wave Banner
+const pointerHintEl = document.getElementById('pointer-hint') as HTMLElement;
+const waveBannerEl = document.getElementById('wave-banner') as HTMLElement;
+const waveBannerSubEl = document.getElementById('wave-banner-sub') as HTMLElement;
+const waveBannerTitleEl = document.getElementById('wave-banner-title') as HTMLElement;
 
-// Screens
-const menuScreen = document.getElementById('menu-screen')!;
-const pauseScreen = document.getElementById('pause-screen')!;
-const victoryScreen = document.getElementById('victory-screen')!;
-const gameoverScreen = document.getElementById('gameover-screen')!;
-const hangarScreen = document.getElementById('hangar-screen')!;
-const touchControlsEl = document.getElementById('touch-controls')!;
+// Battle HUD
+const battleHudEl = document.getElementById('battle-hud') as HTMLElement;
+const hudModeTitleEl = document.getElementById('hud-mode-title') as HTMLElement;
+const hudWaveBadgeEl = document.getElementById('hud-wave-badge') as HTMLElement;
+const hudEnemiesLeftEl = document.getElementById('hud-enemies-left') as HTMLElement;
+const bossBarEl = document.getElementById('boss-bar') as HTMLElement;
+const bossNameEl = document.getElementById('boss-name') as HTMLElement;
+const bossHpTextEl = document.getElementById('boss-hp-text') as HTMLElement;
+const bossHpFillEl = document.getElementById('boss-hp-fill') as HTMLElement;
+const hudKillsEl = document.getElementById('hud-kills') as HTMLElement;
+const hudScoreEl = document.getElementById('hud-score') as HTMLElement;
+const hudCoinsEl = document.getElementById('hud-coins') as HTMLElement;
+const btnMuteHud = document.getElementById('btn-mute') as HTMLButtonElement;
+const btnPauseHud = document.getElementById('btn-pause') as HTMLButtonElement;
 
-// Main Menu Elements
-const btnModeCampaign = document.getElementById('btn-mode-campaign') as HTMLButtonElement;
-const btnModeHorde = document.getElementById('btn-mode-horde') as HTMLButtonElement;
-const campaignStageBox = document.getElementById('campaign-stage-box')!;
-const hordeInfoBox = document.getElementById('horde-info-box')!;
-const menuSelectedStage = document.getElementById('menu-selected-stage')!;
-const btnStagePrev = document.getElementById('btn-stage-prev') as HTMLButtonElement;
-const btnStageNext = document.getElementById('btn-stage-next') as HTMLButtonElement;
-const menuBestScore = document.getElementById('menu-best-score')!;
-const menuBestHorde = document.getElementById('menu-best-horde')!;
-const menuTotalKills = document.getElementById('menu-total-kills')!;
-const menuMaxStage = document.getElementById('menu-max-stage')!;
-const menuCoins = document.getElementById('menu-coins')!;
-const menuCurrentTank = document.getElementById('menu-current-tank')!;
-const btnOpenHangar = document.getElementById('btn-open-hangar')!;
-const btnStart = document.getElementById('btn-start')!;
-const btnInstall = document.getElementById('btn-install')!;
-const offlineBadge = document.getElementById('offline-badge')!;
-const btnMenuSound = document.getElementById('btn-menu-sound')!;
+// Tank Status Panel
+const hudTankNameEl = document.getElementById('hud-tank-name') as HTMLElement;
+const hudSpeedEl = document.getElementById('hud-speed') as HTMLElement;
+const hudBuffsEl = document.getElementById('hud-buffs') as HTMLElement;
+const playerHpTextEl = document.getElementById('player-hp-text') as HTMLElement;
+const playerHpFillEl = document.getElementById('player-hp-fill') as HTMLElement;
 
-// HUD Action Buttons
-const btnCamera = document.getElementById('btn-camera')!;
-const btnTouchToggle = document.getElementById('btn-touch-toggle')!;
-const btnSound = document.getElementById('btn-sound')!;
-const btnPause = document.getElementById('btn-pause')!;
-const btnResume = document.getElementById('btn-resume')!;
-const btnPauseCamera = document.getElementById('btn-pause-camera')!;
-const btnRestart = document.getElementById('btn-restart')!;
-const btnQuit = document.getElementById('btn-quit')!;
+// Action Bar (Weapons, Consumables)
+const slotWeapon1El = document.getElementById('slot-weapon-1') as HTMLElement;
+const slot1NameEl = document.getElementById('slot-1-name') as HTMLElement;
+const slot1FillEl = document.getElementById('slot-1-fill') as HTMLElement;
+const slot1TimerEl = document.getElementById('slot-1-timer') as HTMLElement;
+const slotWeapon2El = document.getElementById('slot-weapon-2') as HTMLElement;
+const slot2NameEl = document.getElementById('slot-2-name') as HTMLElement;
+const slot2FillEl = document.getElementById('slot-2-fill') as HTMLElement;
+const slot2TimerEl = document.getElementById('slot-2-timer') as HTMLElement;
+const slotRepairEl = document.getElementById('slot-repair') as HTMLElement;
+const slot3FillEl = document.getElementById('slot-3-fill') as HTMLElement;
+const slot3TimerEl = document.getElementById('slot-3-timer') as HTMLElement;
+const btnSniperHud = document.getElementById('btn-sniper-hud') as HTMLButtonElement;
 
-// Victory & Game Over Elements
-const victoryTitle = document.getElementById('victory-title')!;
-const victoryBreakdown = document.getElementById('victory-breakdown')!;
-const victoryCoinsEarned = document.getElementById('victory-coins-earned')!;
-const victoryTotalScore = document.getElementById('victory-total-score')!;
-const btnNextStage = document.getElementById('btn-next-stage')!;
-const btnVictoryHangar = document.getElementById('btn-victory-hangar')!;
+// Minimap
+const minimapCanvas = document.getElementById('minimap-canvas') as HTMLCanvasElement;
+const minimapCtx = minimapCanvas?.getContext('2d');
 
-const gameoverReason = document.getElementById('gameover-reason')!;
-const gameoverScore = document.getElementById('gameover-score')!;
-const gameoverBest = document.getElementById('gameover-best')!;
-const gameoverCoinsEarned = document.getElementById('gameover-coins-earned')!;
-const newRecordBadge = document.getElementById('new-record-badge')!;
-const btnRetry = document.getElementById('btn-retry')!;
-const btnGameoverHangar = document.getElementById('btn-gameover-hangar')!;
-const btnGameoverMenu = document.getElementById('btn-gameover-menu')!;
+// Touch Controls
+const touchControlsEl = document.getElementById('touch-controls') as HTMLElement;
+const btnTouchFire = document.getElementById('btn-touch-fire') as HTMLButtonElement;
+const btnTouchSniper = document.getElementById('btn-touch-sniper') as HTMLButtonElement;
+const btnTouchW1 = document.getElementById('btn-touch-w1') as HTMLButtonElement;
+const btnTouchW2 = document.getElementById('btn-touch-w2') as HTMLButtonElement;
+const btnTouchRepair = document.getElementById('btn-touch-repair') as HTMLButtonElement;
 
-// Hangar Elements
-const btnCloseHangar = document.getElementById('btn-close-hangar')!;
-const hangarCoins = document.getElementById('hangar-coins')!;
-const hangarClassTabs = document.getElementById('hangar-class-tabs')!;
-const hangarTankName = document.getElementById('hangar-tank-name')!;
-const hangarTankSub = document.getElementById('hangar-tank-sub')!;
-const hangarTankDesc = document.getElementById('hangar-tank-desc')!;
-const btnHangarAction = document.getElementById('btn-hangar-action') as HTMLButtonElement;
-const hangarUpgradesList = document.getElementById('hangar-upgrades-list')!;
-const hangarBaseInfo = document.getElementById('hangar-base-info')!;
-const btnUpgradeBase = document.getElementById('btn-upgrade-base') as HTMLButtonElement;
+// Hangar Screen
+const hangarScreenEl = document.getElementById('hangar-screen') as HTMLElement;
+const hangarOrbitZoneEl = document.getElementById('hangar-orbit-zone') as HTMLElement;
+const offlineBadgeEl = document.getElementById('offline-badge') as HTMLElement;
+const btnPlayWaves = document.getElementById('btn-play-waves') as HTMLButtonElement;
+const btnPlayDuel = document.getElementById('btn-play-duel') as HTMLButtonElement;
+const hangarCoinsEl = document.getElementById('hangar-coins') as HTMLElement;
+const hangarBestWaveEl = document.getElementById('hangar-best-wave') as HTMLElement;
+const hangarDuelWinsEl = document.getElementById('hangar-duel-wins') as HTMLElement;
+const btnHangarMute = document.getElementById('btn-hangar-mute') as HTMLButtonElement;
+const btnHangarTouch = document.getElementById('btn-hangar-touch') as HTMLButtonElement;
+const btnInstall = document.getElementById('btn-install') as HTMLButtonElement;
+
+const btnTestDrive = document.getElementById('btn-test-drive') as HTMLButtonElement;
+const mapSelectorEl = document.getElementById('map-selector') as HTMLElement;
+
+// Hangar Tank Card
+const hangarTierBadgeEl = document.getElementById('hangar-tier-badge') as HTMLElement;
+const hangarTankTitleEl = document.getElementById('hangar-tank-title') as HTMLElement;
+const hangarTankClassEl = document.getElementById('hangar-tank-class') as HTMLElement;
+const btnUnlockTank = document.getElementById('btn-unlock-tank') as HTMLButtonElement;
+const hangarTankDescEl = document.getElementById('hangar-tank-desc') as HTMLElement;
+const hangarWeaponsInfoEl = document.getElementById('hangar-weapons-info') as HTMLElement;
+const upgradesListEl = document.getElementById('upgrades-list') as HTMLElement;
+const tankCarouselEl = document.getElementById('tank-carousel') as HTMLElement;
+
+// Pause Modal
+const pauseModalEl = document.getElementById('pause-modal') as HTMLElement;
+const btnResume = document.getElementById('btn-resume') as HTMLButtonElement;
+const btnRestart = document.getElementById('btn-restart') as HTMLButtonElement;
+const btnToHangar = document.getElementById('btn-to-hangar') as HTMLButtonElement;
+
+// Result Modal
+const resultModalEl = document.getElementById('result-modal') as HTMLElement;
+const resultTitleEl = document.getElementById('result-title') as HTMLElement;
+const resultSubtitleEl = document.getElementById('result-subtitle') as HTMLElement;
+const resWaveEl = document.getElementById('res-wave') as HTMLElement;
+const resKillsEl = document.getElementById('res-kills') as HTMLElement;
+const resDamageEl = document.getElementById('res-damage') as HTMLElement;
+const resCoinsEl = document.getElementById('res-coins') as HTMLElement;
+const resScoreEl = document.getElementById('res-score') as HTMLElement;
+const btnPlayAgain = document.getElementById('btn-play-again') as HTMLButtonElement;
+const btnResultHangar = document.getElementById('btn-result-hangar') as HTMLButtonElement;
 
 // ============================================================================
-// State
+// State Variables
 // ============================================================================
 
-let currentMode: GameModeKind = 'campaign';
-let selectedStage = storage.getData().unlockedStage;
-let activeStage = 1;
-let previewClass: TankClassId = storage.getData().selectedClass;
-let bannerTimeout: number | null = null;
+let currentScreen: ScreenMode = 'hangar';
+let inspectedTank: TankTierId = storage.getData().selectedTank || 'tier1';
+let activeBattleTank: TankTierId = storage.getData().selectedTank || 'tier1';
+let lastBattleMode: GameModeKind = 'waves';
+let waveBannerTimer: number | null = null;
+let deferredInstallPrompt: BeforeInstallPromptEvent | null = null;
 
-// Touch detection
-const isCoarsePointer =
-  window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-let showTouchControls =
-  storage.getData().touchEnabled !== null ? Boolean(storage.getData().touchEnabled) : isCoarsePointer;
+// Enemy 2D Plate DOM Pool
+const enemyPlatePool: HTMLElement[] = [];
 
-function cameraLabel(mode: CameraMode): string {
-  switch (mode) {
-    case 'angled':
-      return '📷 Камера: Класична 3D';
-    case 'top':
-      return '📷 Камера: Вид зверху';
-    case 'follow':
-      return '📷 Камера: За танком';
+// ============================================================================
+// Game Initialization & Callbacks
+// ============================================================================
+
+const gameCallbacks: TankGameCallbacks = {
+  onHudUpdate(hud: HudState) {
+    updateBattleHud(hud);
+  },
+  onTurretAimUpdate(offset: TurretAimScreenOffset) {
+    updateTurretAimRing(offset);
+  },
+  onEnemyPlatesUpdate(plates: EnemyPlateScreenItem[]) {
+    updateEnemyPlates(plates);
+  },
+  onFloatingText(item: FloatingTextItem) {
+    createFloatingText(item);
+  },
+  onWaveBanner(waveOrTitle: number | string, subtitle?: string) {
+    const title = typeof waveOrTitle === 'number' ? `ХВИЛЯ ${waveOrTitle}` : waveOrTitle;
+    showWaveBanner(title, subtitle ?? 'ПРИГОТУЙТЕСЯ ДО БОЮ');
+  },
+  onBattleEnd(summary: BattleSummary) {
+    handleBattleEnd(summary);
+  },
+  onPauseChange(paused: boolean) {
+    if (paused && currentScreen === 'battle') {
+      setScreen('pause');
+    } else if (!paused && currentScreen === 'pause') {
+      setScreen('battle');
+    }
   }
-}
+};
 
-function syncSoundUi(): void {
-  const muted = sound.isMuted();
-  btnSound.textContent = muted ? '🔇' : '🔊';
-  btnMenuSound.textContent = muted ? '🔇 Звук: Вимк' : '🔊 Звук: Увімк';
-}
+const game = new TankGame3D(canvas, sound, input, storage, gameCallbacks);
 
-function syncTouchVisibility(inGameplay: boolean): void {
-  touchControlsEl.classList.toggle('hidden', !(inGameplay && showTouchControls));
-}
+// Show initial Hangar with selected tank
+game.showHangar(inspectedTank);
 
 // ============================================================================
-// Menu UI Refresh
+// Screen Navigation
 // ============================================================================
 
-function refreshMenuUi(): void {
-  const save = storage.getData();
-  if (selectedStage > save.unlockedStage) {
-    selectedStage = save.unlockedStage;
-  }
-
-  menuCoins.textContent = `🪙 ${save.coins.toLocaleString('uk-UA')}`;
-  menuBestScore.textContent = save.bestScore.toLocaleString('uk-UA');
-  menuBestHorde.textContent = save.bestHordeWave.toLocaleString('uk-UA');
-  menuTotalKills.textContent = save.totalKills.toLocaleString('uk-UA');
-  menuMaxStage.textContent = String(save.unlockedStage);
-
-  const spec = TANK_CLASSES[save.selectedClass] ?? TANK_CLASSES.allrounder;
-  menuCurrentTank.textContent = spec.name;
-
-  const info = getStageInfo(selectedStage);
-  menuSelectedStage.textContent = `Рівень ${selectedStage} — ${info.name}`;
-  btnStagePrev.disabled = selectedStage <= 1;
-  btnStageNext.disabled = selectedStage >= save.unlockedStage;
-
-  btnPauseCamera.textContent = cameraLabel(save.cameraMode);
-  syncSoundUi();
-}
-
-function setGameMode(mode: GameModeKind): void {
-  currentMode = mode;
-  btnModeCampaign.classList.toggle('active', mode === 'campaign');
-  btnModeHorde.classList.toggle('active', mode === 'horde');
-  campaignStageBox.classList.toggle('hidden', mode === 'horde');
-  hordeInfoBox.classList.toggle('hidden', mode === 'campaign');
-}
-
-// ============================================================================
-// HUD Updates
-// ============================================================================
-
-function updateHud(state: HudState): void {
-  activeStage = state.stageOrWave;
-  hudStageLabel.textContent = state.mode === 'horde' ? 'ХВИЛЯ' : 'РІВЕНЬ';
-  hudStage.textContent = String(state.stageOrWave);
-  hudEnemies.textContent = String(state.enemiesRemaining);
-  hudLives.textContent = `❤️ ${state.lives}`;
-  hudCoins.textContent = `🪙 ${state.coins.toLocaleString('uk-UA')}`;
-  hudScore.textContent = state.score.toLocaleString('uk-UA');
-  hudBest.textContent = state.bestScore.toLocaleString('uk-UA');
-  hudStars.textContent = '★ '.repeat(state.stars) + '☆ '.repeat(3 - state.stars);
-
-  // Player Tank HP
-  hudPlayerHpText.textContent = `${state.playerHp} / ${state.playerMaxHp}`;
-  const pPct = Math.max(0, Math.min(100, (state.playerHp / state.playerMaxHp) * 100));
-  hudPlayerHpFill.style.width = `${pPct}%`;
-
-  // HQ Base HP
-  hudBaseHpText.textContent = `${state.baseHp} / ${state.baseMaxHp}`;
-  const bPct = Math.max(0, Math.min(100, (state.baseHp / state.baseMaxHp) * 100));
-  hudBaseHpFill.style.width = `${bPct}%`;
-  hudBaseCard.classList.toggle('critical', bPct <= 30);
-
-  // Boss Health Bar
-  if (state.bossName && state.bossHp > 0) {
-    bossNameEl.textContent = `БОС: ${state.bossName}`;
-    bossHpTextEl.textContent = `${state.bossHp} / ${state.bossMaxHp}`;
-    const bossPct = Math.max(0, Math.min(100, (state.bossHp / state.bossMaxHp) * 100));
-    bossHpFillEl.style.width = `${bossPct}%`;
-    bossBarEl.classList.remove('hidden');
+function updatePointerHint(): void {
+  if (currentScreen === 'battle' && !input.isTouchActive()) {
+    const isLocked = document.pointerLockElement === canvas;
+    pointerHintEl.classList.toggle('hidden', isLocked);
   } else {
-    bossBarEl.classList.add('hidden');
+    pointerHintEl.classList.add('hidden');
+  }
+}
+
+document.addEventListener('pointerlockchange', updatePointerHint);
+
+function setScreen(mode: ScreenMode): void {
+  currentScreen = mode;
+
+  hangarScreenEl.classList.toggle('hidden', mode !== 'hangar');
+  battleHudEl.classList.toggle('hidden', mode !== 'battle');
+  arcadeReticleEl.classList.toggle('hidden', mode !== 'battle');
+  pauseModalEl.classList.toggle('hidden', mode !== 'pause');
+  resultModalEl.classList.toggle('hidden', mode !== 'result');
+
+  if (mode === 'hangar') {
+    input.setGameplayActive(false);
+    arcadeReticleEl.classList.add('hidden');
+    targetInfoEl.classList.add('hidden');
+    sniperOverlayEl.classList.add('hidden');
+    touchControlsEl.classList.add('hidden');
+    waveBannerEl.classList.add('hidden');
+    clearEnemyPlates();
+    updatePointerHint();
+    renderHangar();
+  } else if (mode === 'battle') {
+    input.setGameplayActive(true);
+    const isTouch = input.isTouchActive();
+    touchControlsEl.classList.toggle('hidden', !isTouch);
+    updatePointerHint();
+  } else if (mode === 'pause') {
+    input.setGameplayActive(false);
+    updatePointerHint();
+  } else if (mode === 'result') {
+    input.setGameplayActive(false);
+    arcadeReticleEl.classList.add('hidden');
+    targetInfoEl.classList.add('hidden');
+    sniperOverlayEl.classList.add('hidden');
+    touchControlsEl.classList.add('hidden');
+    clearEnemyPlates();
+    updatePointerHint();
+  }
+}
+
+// ============================================================================
+// Hangar UI Rendering & Logic
+// ============================================================================
+
+function selectHangarTank(tierId: TankTierId): void {
+  inspectedTank = tierId;
+  game.setHangarTank(tierId);
+
+  const data = storage.getData();
+  if (data.unlockedTanks.includes(tierId) || data.testDriveEnabled) {
+    storage.selectTank(tierId);
   }
 
-  // Active Buffs
-  const pills: string[] = [];
-  if (state.shieldTimer > 0) {
-    pills.push(`<span class="buff-pill">🛡️ Щит: ${Math.ceil(state.shieldTimer)}с</span>`);
-  }
-  if (state.freezeTimer > 0) {
-    pills.push(`<span class="buff-pill">⏱️ Заморозка: ${Math.ceil(state.freezeTimer)}с</span>`);
-  }
-  if (state.shovelTimer > 0) {
-    pills.push(`<span class="buff-pill">🧱 Сталевий штаб: ${Math.ceil(state.shovelTimer)}с</span>`);
-  }
+  renderHangar();
+  sound.playUiClick();
+}
 
-  if (pills.length > 0) {
-    buffsBarEl.innerHTML = pills.join('');
-    buffsBarEl.classList.remove('hidden');
+function renderHangar(): void {
+  const data = storage.getData();
+  const spec = TANK_SPECS[inspectedTank] ?? TANK_SPECS.tier1;
+  const isUnlocked = data.unlockedTanks.includes(inspectedTank);
+  const testDrive = data.testDriveEnabled;
+  const isAvailable = isUnlocked || testDrive;
+  const upgrades = data.tankUpgrades[inspectedTank] ?? { hp: 0, damage: 0, reload: 0, speed: 0 };
+  const computed = computeTankStats(inspectedTank, upgrades);
+
+  // 1. Top right records & balance
+  hangarCoinsEl.textContent = data.coins.toLocaleString('uk-UA');
+  hangarBestWaveEl.textContent = data.bestWave.toString();
+  hangarDuelWinsEl.textContent = data.duelWins.toString();
+
+  // Mute button icon
+  btnHangarMute.textContent = sound.isMuted() ? '🔇' : '🔊';
+  btnMuteHud.textContent = sound.isMuted() ? '🔇' : '🔊';
+
+  // Touch mode button indicator
+  btnHangarTouch.classList.toggle('active', input.isTouchActive());
+
+  // 2. Test Drive button state
+  btnTestDrive.classList.toggle('active', testDrive);
+  if (testDrive) {
+    btnTestDrive.innerHTML = `
+      <span class="test-drive-led"></span>
+      <span class="test-drive-text">⚡ Тест-драйв: <strong>УВІМК — усі танки I–V доступні!</strong></span>
+    `;
   } else {
-    buffsBarEl.classList.add('hidden');
+    btnTestDrive.innerHTML = `
+      <span class="test-drive-led"></span>
+      <span class="test-drive-text">⚡ Тест-драйв: <strong>ВИМК (спробуй танк V рівня одразу!)</strong></span>
+    `;
   }
-}
 
-function showStageIntro(stageOrWave: number, name: string): void {
-  stageBannerSub.textContent = currentMode === 'horde' ? 'НЕСКІНЧЕННА ОРДА' : 'ПРИГОТУЙТЕСЬ ДО БОЮ';
-  stageBannerTitle.textContent = currentMode === 'horde' ? `ХВИЛЯ ${stageOrWave}` : `РІВЕНЬ ${stageOrWave}`;
-  stageBannerName.textContent = name;
-  stageBannerEl.classList.remove('hidden');
-
-  if (bannerTimeout) window.clearTimeout(bannerTimeout);
-  bannerTimeout = window.setTimeout(() => {
-    stageBannerEl.classList.add('hidden');
-  }, 2000);
-}
-
-// ============================================================================
-// Radar & Floating Numbers Layers
-// ============================================================================
-
-function renderRadar(indicators: RadarIndicator[]): void {
-  radarLayerEl.innerHTML = '';
-  for (const ind of indicators) {
-    const marker = document.createElement('div');
-    marker.className = `radar-marker ${ind.kind}${ind.urgent ? ' urgent' : ''}`;
-    marker.style.left = `${ind.x}px`;
-    marker.style.top = `${ind.y}px`;
-
-    const icon = document.createElement('span');
-    icon.className = 'radar-icon';
-    icon.textContent = ind.kind === 'base' ? '🦅' : ind.kind === 'boss' ? '☠️' : '•';
-    marker.appendChild(icon);
-
-    const arrow = document.createElement('div');
-    arrow.className = 'radar-arrow';
-    arrow.style.transform = `rotate(${ind.angleRad}rad)`;
-    marker.appendChild(arrow);
-
-    radarLayerEl.appendChild(marker);
-  }
-}
-
-function addFloatingText(item: FloatingTextItem): void {
-  const el = document.createElement('div');
-  el.className = `floating-text${item.big ? ' big' : ''}`;
-  el.style.left = `${item.x}px`;
-  el.style.top = `${item.y}px`;
-  el.style.color = item.color;
-  el.textContent = item.text;
-  floatingLayerEl.appendChild(el);
-
-  window.setTimeout(() => {
-    if (el.parentNode) el.parentNode.removeChild(el);
-  }, 900);
-}
-
-// ============================================================================
-// 3D Hangar Logic
-// ============================================================================
-
-function refreshHangarUi(): void {
-  const save = storage.getData();
-  hangarCoins.textContent = `🪙 ${save.coins.toLocaleString('uk-UA')}`;
-
-  const spec = TANK_CLASSES[previewClass] ?? TANK_CLASSES.allrounder;
-  hangarTankName.textContent = spec.name;
-  hangarTankSub.textContent = spec.subtitle;
-  hangarTankDesc.textContent = spec.description;
-
-  // Render Class Tabs
-  hangarClassTabs.innerHTML = '';
-  for (const cid of TANK_CLASS_ORDER) {
-    const tabSpec = TANK_CLASSES[cid];
-    const isUnlocked = save.unlockedClasses.includes(cid);
-    const isSelected = save.selectedClass === cid;
-    const tab = document.createElement('button');
-    tab.type = 'button';
-    tab.className = `hangar-class-tab${cid === previewClass ? ' active' : ''}`;
-    tab.innerHTML = `${isSelected ? '⭐ ' : !isUnlocked ? '🔒 ' : ''}${tabSpec.name.split(' ')[0]}`;
-    tab.addEventListener('click', () => {
-      sound.unlock();
+  // 3. Map Selector
+  mapSelectorEl.innerHTML = '';
+  for (const mapId of MAP_ORDER) {
+    const mapDef = MAP_DEFINITIONS[mapId];
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'map-select-btn' + (data.selectedMap === mapId ? ' active' : '');
+    btn.textContent = mapDef.name;
+    btn.title = mapDef.subtitle;
+    btn.addEventListener('click', () => {
+      storage.selectMap(mapId);
+      renderHangar();
       sound.playUiClick();
-      previewClass = cid;
-      game.showHangarPreview(previewClass);
-      refreshHangarUi();
     });
-    hangarClassTabs.appendChild(tab);
+    mapSelectorEl.appendChild(btn);
   }
 
-  // Action Button (Unlock / Select / Selected)
-  const isUnlocked = save.unlockedClasses.includes(previewClass);
-  const isSelected = save.selectedClass === previewClass;
+  // 4. Tank Specification Card
+  hangarTierBadgeEl.textContent = spec.romanTier;
+  hangarTankTitleEl.textContent = spec.name;
+  hangarTankClassEl.textContent = `${spec.classLabel} • Рівень ${spec.romanTier}`;
+  hangarTankDescEl.textContent = spec.description;
 
-  if (!isUnlocked) {
-    btnHangarAction.className = 'hangar-action-btn';
-    btnHangarAction.disabled = save.coins < spec.unlockCost;
-    btnHangarAction.textContent = `🔓 Відкрити за ${spec.unlockCost} 🪙`;
-    btnHangarAction.onclick = () => {
-      sound.unlock();
-      if (storage.unlockClass(previewClass, spec.unlockCost)) {
-        storage.selectClass(previewClass);
-        sound.playPowerUpPickup();
-        refreshHangarUi();
-        refreshMenuUi();
+  // Unlock button
+  if (isAvailable) {
+    btnUnlockTank.classList.add('hidden');
+  } else {
+    btnUnlockTank.classList.remove('hidden');
+    btnUnlockTank.textContent = `Купити за 🪙 ${spec.unlockCost}`;
+    btnUnlockTank.disabled = data.coins < spec.unlockCost;
+    btnUnlockTank.onclick = () => {
+      if (storage.unlockTank(inspectedTank, spec.unlockCost)) {
+        storage.selectTank(inspectedTank);
+        sound.playRepair();
+        renderHangar();
       }
     };
-  } else if (isSelected) {
-    btnHangarAction.className = 'hangar-action-btn selected';
-    btnHangarAction.disabled = true;
-    btnHangarAction.textContent = '✓ Обрано';
-    btnHangarAction.onclick = null;
-  } else {
-    btnHangarAction.className = 'hangar-action-btn';
-    btnHangarAction.disabled = false;
-    btnHangarAction.textContent = 'Обрати';
-    btnHangarAction.onclick = () => {
-      sound.unlock();
-      sound.playUiClick();
-      storage.selectClass(previewClass);
-      refreshHangarUi();
-      refreshMenuUi();
-    };
   }
 
-  // Upgrades List
-  const upgrades = save.tankUpgrades[previewClass] ?? { armor: 0, damage: 0, fireRate: 0, speed: 0 };
-  const statDefs: { key: keyof TankUpgradeLevels; label: string }[] = [
-    { key: 'armor', label: 'Броня (HP)' },
-    { key: 'damage', label: 'Вогнева міць' },
-    { key: 'fireRate', label: 'Скорострільність' },
-    { key: 'speed', label: 'Швидкість ходу' }
+  // Weapons info
+  hangarWeaponsInfoEl.innerHTML = `
+    <div class="weapon-info-row">
+      <span class="w-slot">[1]</span>
+      <span class="w-name">${spec.primaryWeapon.name}</span>
+      <span class="w-dmg">${computed.primaryWeapon.damage} Шкоди • ${computed.primaryWeapon.reloadSec}с</span>
+    </div>
+    ${
+      spec.secondaryWeapon && computed.secondaryWeapon
+        ? `
+      <div class="weapon-info-row" style="color:#38bdf8;">
+        <span class="w-slot">[2]</span>
+        <span class="w-name">${spec.secondaryWeapon.name}</span>
+        <span class="w-dmg">${computed.secondaryWeapon.damage} Шкоди • ${computed.secondaryWeapon.reloadSec}с</span>
+      </div>
+      `
+        : ''
+    }
+  `;
+
+  // Upgrades list (HP, Damage, Reload, Speed)
+  const upgradeConfig: Array<{ key: keyof TankUpgradeLevels; label: string }> = [
+    { key: 'hp', label: 'Міцність (HP)' },
+    { key: 'damage', label: 'Шкода гармати' },
+    { key: 'reload', label: 'Перезарядка' },
+    { key: 'speed', label: 'Швидкість' }
   ];
 
-  hangarUpgradesList.innerHTML = '';
-  for (const st of statDefs) {
-    const lvl = upgrades[st.key] ?? 0;
-    const cost = getUpgradeCost(lvl);
-    const row = document.createElement('div');
-    row.className = 'upgrade-row';
+  upgradesListEl.innerHTML = '';
+  for (const stat of upgradeConfig) {
+    const curLevel = upgrades[stat.key] ?? 0;
+    const cost = getUpgradeCost(spec.tierNumber, curLevel);
+    const isMax = curLevel >= MAX_UPGRADE_LEVEL;
 
-    let pipsHtml = '';
-    for (let p = 0; p < MAX_UPGRADE_LEVEL; p++) {
-      pipsHtml += `<div class="upgrade-pip${p < lvl ? ' filled' : ''}"></div>`;
+    const row = document.createElement('div');
+    row.className = 'upgrade-card-item';
+
+    // Dots for levels
+    let dotsHtml = '';
+    for (let i = 0; i < MAX_UPGRADE_LEVEL; i++) {
+      dotsHtml += `<div class="upgrade-dot ${i < curLevel ? 'filled' : ''}"></div>`;
     }
 
-    const btnText = lvl >= MAX_UPGRADE_LEVEL ? 'МАКС' : `+1 • ${cost} 🪙`;
-    const disabled = lvl >= MAX_UPGRADE_LEVEL || save.coins < cost;
-
     row.innerHTML = `
-      <div class="upgrade-stat-info">
-        <span class="upgrade-stat-name">${st.label} (Рів. ${lvl})</span>
-        <div class="upgrade-pips">${pipsHtml}</div>
+      <div class="upgrade-meta">
+        <span class="upgrade-name">${stat.label} (${curLevel}/${MAX_UPGRADE_LEVEL})</span>
+        <div class="upgrade-level-dots">${dotsHtml}</div>
       </div>
-      <button class="upgrade-btn" type="button" ${disabled ? 'disabled' : ''}>${btnText}</button>
+      <button class="btn-upgrade-action" ${isMax || data.coins < cost ? 'disabled' : ''}>
+        ${isMax ? 'МАКС' : `🪙 ${cost}`}
+      </button>
     `;
 
-    const upBtn = row.querySelector('.upgrade-btn') as HTMLButtonElement;
-    upBtn.addEventListener('click', () => {
-      sound.unlock();
-      if (storage.upgradeTankStat(previewClass, st.key, cost)) {
-        sound.playPowerUpPickup();
-        refreshHangarUi();
-        refreshMenuUi();
-      }
+    const btnUpgrade = row.querySelector('.btn-upgrade-action') as HTMLButtonElement;
+    if (!isMax) {
+      btnUpgrade.addEventListener('click', () => {
+        if (storage.upgradeTankStat(inspectedTank, stat.key, cost)) {
+          sound.playUiClick();
+          renderHangar();
+        }
+      });
+    }
+
+    upgradesListEl.appendChild(row);
+  }
+
+  // 5. Tank Carousel (5 WoT Tanks I..V)
+  tankCarouselEl.innerHTML = '';
+  for (const tierId of TANK_TIER_ORDER) {
+    const tSpec = TANK_SPECS[tierId];
+    const tUnlocked = data.unlockedTanks.includes(tierId);
+    const tAvailable = tUnlocked || testDrive;
+    const isSelected = tierId === inspectedTank;
+
+    const slot = document.createElement('div');
+    slot.className = 'tank-carousel-slot' + (isSelected ? ' active' : '') + (!tAvailable ? ' locked' : '');
+
+    let statusText = '';
+    if (testDrive) {
+      statusText = '⚡ Тест-драйв';
+    } else if (tUnlocked) {
+      statusText = '✅ У гаражі';
+    } else {
+      statusText = `🔒 🪙 ${tSpec.unlockCost}`;
+    }
+
+    slot.innerHTML = `
+      <div class="slot-top-row">
+        <span class="slot-tier-tag">${tSpec.romanTier}</span>
+        <span class="slot-tank-sub">${statusText}</span>
+      </div>
+      <div class="slot-tank-label">${tSpec.name}</div>
+    `;
+
+    slot.addEventListener('click', () => {
+      selectHangarTank(tierId);
     });
 
-    hangarUpgradesList.appendChild(row);
+    tankCarouselEl.appendChild(slot);
   }
+}
 
-  // Base Fortification
-  const baseLvl = save.baseHpLevel ?? 0;
-  const baseCost = getBaseUpgradeCost(baseLvl);
-  const baseHp = computeBaseMaxHp(baseLvl);
-  hangarBaseInfo.textContent = `Рівень ${baseLvl} / ${MAX_UPGRADE_LEVEL} (${baseHp} HP)`;
+// ============================================================================
+// Hangar Orbit Controls (Pointer Drag)
+// ============================================================================
 
-  if (baseLvl >= MAX_UPGRADE_LEVEL) {
-    btnUpgradeBase.textContent = 'МАКС';
-    btnUpgradeBase.disabled = true;
-    btnUpgradeBase.onclick = null;
+let isOrbitDragging = false;
+let lastOrbitX = 0;
+let lastOrbitY = 0;
+
+hangarOrbitZoneEl.addEventListener('pointerdown', (e) => {
+  isOrbitDragging = true;
+  lastOrbitX = e.clientX;
+  lastOrbitY = e.clientY;
+  try {
+    hangarOrbitZoneEl.setPointerCapture(e.pointerId);
+  } catch {
+    // Safe fallback
+  }
+});
+
+hangarOrbitZoneEl.addEventListener('pointermove', (e) => {
+  if (!isOrbitDragging) return;
+  const dx = e.clientX - lastOrbitX;
+  const dy = e.clientY - lastOrbitY;
+  lastOrbitX = e.clientX;
+  lastOrbitY = e.clientY;
+
+  game.orbitHangar(dx * 0.008, dy * 0.004);
+});
+
+const stopOrbitDragging = (e: PointerEvent) => {
+  if (isOrbitDragging) {
+    isOrbitDragging = false;
+    try {
+      hangarOrbitZoneEl.releasePointerCapture(e.pointerId);
+    } catch {
+      // Safe fallback
+    }
+  }
+};
+
+hangarOrbitZoneEl.addEventListener('pointerup', stopOrbitDragging);
+hangarOrbitZoneEl.addEventListener('pointercancel', stopOrbitDragging);
+
+// ============================================================================
+// Battle Launching
+// ============================================================================
+
+function launchBattle(mode: GameModeKind): void {
+  sound.unlock();
+  sound.playStageStart();
+
+  const data = storage.getData();
+  let tankToPlay = inspectedTank;
+  const isAvailable = data.unlockedTanks.includes(inspectedTank) || data.testDriveEnabled;
+
+  if (!isAvailable) {
+    // If player tapped start on locked tank without test drive, use selected active tank
+    tankToPlay = data.selectedTank;
   } else {
-    btnUpgradeBase.textContent = `Укріпити • ${baseCost} 🪙`;
-    btnUpgradeBase.disabled = save.coins < baseCost;
-    btnUpgradeBase.onclick = () => {
-      sound.unlock();
-      if (storage.upgradeBaseHp(baseCost)) {
-        sound.playRepair();
-        refreshHangarUi();
-        refreshMenuUi();
-      }
-    };
+    storage.selectTank(inspectedTank);
   }
+
+  activeBattleTank = tankToPlay;
+  lastBattleMode = mode;
+  game.startBattle(mode, tankToPlay, data.selectedMap);
+  setScreen('battle');
 }
 
-function openHangar(): void {
-  sound.unlock();
-  sound.playUiClick();
-  menuScreen.classList.add('hidden');
-  victoryScreen.classList.add('hidden');
-  gameoverScreen.classList.add('hidden');
-  pauseScreen.classList.add('hidden');
-  hudEl.classList.add('hidden');
-  syncTouchVisibility(false);
+btnPlayWaves.addEventListener('click', () => launchBattle('waves'));
+btnPlayDuel.addEventListener('click', () => launchBattle('duel'));
 
-  previewClass = storage.getData().selectedClass;
-  hangarScreen.classList.remove('hidden');
-  game.showHangarPreview(previewClass);
-  refreshHangarUi();
-}
-
-function closeHangar(): void {
-  sound.unlock();
-  sound.playUiClick();
-  hangarScreen.classList.add('hidden');
-  refreshMenuUi();
-  menuScreen.classList.remove('hidden');
-  game.showMenuPreview(selectedStage);
-}
-
-// ============================================================================
-// Initialize 3D Engine & Callbacks
-// ============================================================================
-
-const game = new TankGame3D(canvas, input, sound, storage, {
-  onHudUpdate: updateHud,
-  onStageIntro: showStageIntro,
-  onRadarUpdate: renderRadar,
-  onFloatingText: addFloatingText,
-  onPauseChanged: (paused) => {
-    pauseScreen.classList.toggle('hidden', !paused);
-    syncTouchVisibility(!paused);
-  },
-  onStageVictory: (stage, kills: StageKills, totalScore, coinsEarned) => {
-    syncTouchVisibility(false);
-    buffsBarEl.classList.add('hidden');
-    bossBarEl.classList.add('hidden');
-    radarLayerEl.innerHTML = '';
-
-    victoryTitle.textContent = `РІВЕНЬ ${stage} ПРОЙДЕНО!`;
-    victoryTotalScore.textContent = totalScore.toLocaleString('uk-UA');
-    victoryCoinsEarned.textContent = `+${coinsEarned} 🪙`;
-
-    const rows = [
-      { label: 'Звичайні танки (100)', count: kills.basic, pts: kills.basic * 100 },
-      { label: 'Швидкі БТР (200)', count: kills.fast, pts: kills.fast * 200 },
-      { label: 'Стрільці (300)', count: kills.power, pts: kills.power * 300 },
-      { label: 'Важкі броньовані (400)', count: kills.armor, pts: kills.armor * 400 },
-      ...(kills.boss > 0 ? [{ label: '☠️ БОС', count: kills.boss, pts: kills.boss * 2500 }] : [])
-    ];
-
-    victoryBreakdown.innerHTML = rows
-      .map(
-        (r) => `
-      <div class="breakdown-row">
-        <span>${r.label} × ${r.count}</span>
-        <strong>+${r.pts}</strong>
-      </div>`
-      )
-      .join('');
-
-    victoryScreen.classList.remove('hidden');
-  },
-  onGameOver: (reason, score, bestScore, isNewRecord, coinsEarned) => {
-    syncTouchVisibility(false);
-    buffsBarEl.classList.add('hidden');
-    bossBarEl.classList.add('hidden');
-    radarLayerEl.innerHTML = '';
-
-    gameoverReason.textContent = reason;
-    gameoverScore.textContent = score.toLocaleString('uk-UA');
-    gameoverBest.textContent = bestScore.toLocaleString('uk-UA');
-    gameoverCoinsEarned.textContent = `+${coinsEarned} 🪙`;
-    newRecordBadge.classList.toggle('hidden', !isNewRecord);
-
-    gameoverScreen.classList.remove('hidden');
+// Test drive toggle
+btnTestDrive.addEventListener('click', () => {
+  const enabled = storage.toggleTestDrive();
+  if (enabled) {
+    storage.selectTank(inspectedTank);
   }
+  renderHangar();
+  sound.playPowerUpSpawn();
 });
 
-// ============================================================================
-// UI Event Handlers
-// ============================================================================
-
-refreshMenuUi();
-game.showMenuPreview(selectedStage);
-
-// Mode switcher
-btnModeCampaign.addEventListener('click', () => {
-  sound.unlock();
-  sound.playUiClick();
-  setGameMode('campaign');
-});
-
-btnModeHorde.addEventListener('click', () => {
-  sound.unlock();
-  sound.playUiClick();
-  setGameMode('horde');
-});
-
-// Campaign Stage Selector
-btnStagePrev.addEventListener('click', () => {
-  sound.unlock();
-  sound.playUiClick();
-  if (selectedStage > 1) {
-    selectedStage -= 1;
-    refreshMenuUi();
-    game.showMenuPreview(selectedStage);
-  }
-});
-
-btnStageNext.addEventListener('click', () => {
-  sound.unlock();
-  sound.playUiClick();
-  if (selectedStage < storage.getData().unlockedStage) {
-    selectedStage += 1;
-    refreshMenuUi();
-    game.showMenuPreview(selectedStage);
-  }
-});
-
-// Sound toggles
-const toggleSound = () => {
+// Sound mute toggle
+function toggleMute(): void {
   const next = !sound.isMuted();
   sound.setMuted(next);
   storage.setMuted(next);
-  if (!next) {
-    sound.unlock();
-    sound.playUiClick();
+  btnHangarMute.textContent = next ? '🔇' : '🔊';
+  btnMuteHud.textContent = next ? '🔇' : '🔊';
+}
+
+btnHangarMute.addEventListener('click', toggleMute);
+btnMuteHud.addEventListener('click', toggleMute);
+
+// Touch mode toggle
+btnHangarTouch.addEventListener('click', () => {
+  const current = input.isTouchActive();
+  const next = !current;
+  storage.setTouchEnabled(next);
+  input.setTouchOverride(next);
+  btnHangarTouch.classList.toggle('active', next);
+  sound.playUiClick();
+});
+
+// ============================================================================
+// Battle HUD Updates
+// ============================================================================
+
+function updateBattleHud(hud: HudState): void {
+  if (currentScreen !== 'battle') return;
+
+  // 1. Top status bar
+  hudModeTitleEl.textContent = hud.mode === 'duel' ? '⚔️ ДУЕЛЬ' : 'ХВИЛІ';
+  hudWaveBadgeEl.textContent = hud.mode === 'duel' ? 'БОС 1 НА 1' : `ХВИЛЯ ${hud.waveNumber}`;
+  hudEnemiesLeftEl.textContent = hud.enemiesRemaining.toString();
+  hudKillsEl.textContent = hud.totalKillsInRun.toString();
+  hudScoreEl.textContent = hud.score.toString();
+  hudCoinsEl.textContent = `🪙 ${hud.coinsEarnedInRun}`;
+
+  // 2. Boss Bar
+  if (hud.bossName && hud.bossHp > 0) {
+    bossBarEl.classList.remove('hidden');
+    bossNameEl.textContent = hud.bossName;
+    bossHpTextEl.textContent = `${Math.max(0, Math.round(hud.bossHp))} / ${hud.bossMaxHp}`;
+    const bossPercent = Math.max(0, Math.min(100, (hud.bossHp / hud.bossMaxHp) * 100));
+    bossHpFillEl.style.width = `${bossPercent.toFixed(1)}%`;
+  } else {
+    bossBarEl.classList.add('hidden');
   }
-  syncSoundUi();
-};
 
-btnSound.addEventListener('click', toggleSound);
-btnMenuSound.addEventListener('click', toggleSound);
+  // 3. Player Tank Panel
+  const tankSpec = TANK_SPECS[activeBattleTank] ?? TANK_SPECS.tier1;
+  hudTankNameEl.textContent = `⭐ ${tankSpec.name}`;
+  hudSpeedEl.textContent = Math.round(Math.abs(hud.speedKmh)).toString();
+  if (slot1NameEl) {
+    slot1NameEl.textContent = tankSpec.primaryWeapon.shortName;
+  }
+  if (slot2NameEl) {
+    slot2NameEl.textContent = tankSpec.secondaryWeapon?.shortName ?? 'Міні-арта';
+  }
 
-// Camera toggles
-const cycleCamera = () => {
-  const mode = game.cycleCameraMode();
-  btnPauseCamera.textContent = cameraLabel(mode);
-};
-btnCamera.addEventListener('click', cycleCamera);
-btnPauseCamera.addEventListener('click', cycleCamera);
+  const hpPercent = Math.max(0, Math.min(100, (hud.playerHp / hud.playerMaxHp) * 100));
+  playerHpTextEl.textContent = `${Math.max(0, Math.round(hud.playerHp))} / ${hud.playerMaxHp}`;
+  playerHpFillEl.style.width = `${hpPercent.toFixed(1)}%`;
 
-// Touch Toggle
-btnTouchToggle.addEventListener('click', () => {
-  sound.playUiClick();
-  showTouchControls = !showTouchControls;
-  storage.setTouchEnabled(showTouchControls);
-  syncTouchVisibility(pauseScreen.classList.contains('hidden'));
-});
+  // Buff badges
+  hudBuffsEl.innerHTML = '';
+  if (hud.shieldTimer > 0) {
+    const b = document.createElement('span');
+    b.className = 'buff-badge shield';
+    b.textContent = `🛡️ Щит ${Math.ceil(hud.shieldTimer)}с`;
+    hudBuffsEl.appendChild(b);
+  }
+  if (hud.damageBoostTimer > 0) {
+    const b = document.createElement('span');
+    b.className = 'buff-badge damage';
+    b.textContent = `⚡ Шкода x2 ${Math.ceil(hud.damageBoostTimer)}с`;
+    hudBuffsEl.appendChild(b);
+  }
 
-// Pause controls
-btnPause.addEventListener('click', () => {
-  sound.playUiClick();
-  game.setPaused(true);
-});
+  // 4. Weapon Action Slots
+  // Slot 1
+  slotWeapon1El.classList.toggle('active', hud.activeWeaponSlot === 1);
+  if (hud.primaryReloadLeft > 0 && hud.primaryReloadTotal > 0) {
+    const ratio = Math.max(0, Math.min(1, hud.primaryReloadLeft / hud.primaryReloadTotal));
+    slot1FillEl.style.height = `${(ratio * 100).toFixed(1)}%`;
+    slot1TimerEl.textContent = `${hud.primaryReloadLeft.toFixed(1)}с`;
+  } else {
+    slot1FillEl.style.height = '0%';
+    slot1TimerEl.textContent = '';
+  }
 
+  // Slot 2 (Mini-Artillery on Tier 5)
+  if (hud.hasSecondaryWeapon) {
+    slotWeapon2El.classList.remove('hidden');
+    btnTouchW2.classList.remove('hidden');
+    slotWeapon2El.classList.toggle('active', hud.activeWeaponSlot === 2);
+
+    if (hud.secondaryReloadLeft > 0 && hud.secondaryReloadTotal > 0) {
+      const ratio = Math.max(0, Math.min(1, hud.secondaryReloadLeft / hud.secondaryReloadTotal));
+      slot2FillEl.style.height = `${(ratio * 100).toFixed(1)}%`;
+      slot2TimerEl.textContent = `${hud.secondaryReloadLeft.toFixed(1)}с`;
+    } else {
+      slot2FillEl.style.height = '0%';
+      slot2TimerEl.textContent = '';
+    }
+  } else {
+    slotWeapon2El.classList.add('hidden');
+    btnTouchW2.classList.add('hidden');
+  }
+
+  // Slot 3 (Repair Kit)
+  if (hud.repairCooldownLeft > 0 && hud.repairCooldownTotal > 0) {
+    const ratio = Math.max(0, Math.min(1, hud.repairCooldownLeft / hud.repairCooldownTotal));
+    slot3FillEl.style.height = `${(ratio * 100).toFixed(1)}%`;
+    slot3TimerEl.textContent = `${Math.ceil(hud.repairCooldownLeft)}с`;
+    slotRepairEl.classList.add('on-cooldown');
+    btnTouchRepair.classList.add('disabled');
+  } else {
+    slot3FillEl.style.height = '0%';
+    slot3TimerEl.textContent = '';
+    slotRepairEl.classList.remove('on-cooldown');
+    btnTouchRepair.classList.remove('disabled');
+  }
+
+  // Mobile weapon buttons sync
+  btnTouchW1.classList.toggle('active', hud.activeWeaponSlot === 1);
+  btnTouchW2.classList.toggle('active', hud.activeWeaponSlot === 2);
+
+  // 5. Target Info Plate
+  if (hud.targetEnemyName && hud.targetEnemyHp > 0) {
+    targetInfoEl.classList.remove('hidden');
+    targetNameEl.textContent = hud.targetEnemyName;
+    targetHpTextEl.textContent = `${Math.max(0, Math.round(hud.targetEnemyHp))} / ${hud.targetEnemyMaxHp} HP`;
+    const targetPercent = Math.max(0, Math.min(100, (hud.targetEnemyHp / hud.targetEnemyMaxHp) * 100));
+    targetHpFillEl.style.width = `${targetPercent.toFixed(1)}%`;
+  } else {
+    targetInfoEl.classList.add('hidden');
+  }
+
+  // 6. Sniper Mode vs Arcade Mode
+  const activeReloadLeft = hud.activeWeaponSlot === 1 ? hud.primaryReloadLeft : hud.secondaryReloadLeft;
+  const activeReloadTotal = hud.activeWeaponSlot === 1 ? hud.primaryReloadTotal : hud.secondaryReloadTotal;
+
+  if (hud.isSniper) {
+    arcadeReticleEl.classList.add('hidden');
+    sniperOverlayEl.classList.remove('hidden');
+
+    sniperDistanceEl.textContent = `${Math.round(hud.aimDistanceMeters)} м`;
+    sniperZoomLabelEl.textContent = `x${hud.sniperZoom}`;
+    sniperWeaponLabelEl.textContent =
+      hud.activeWeaponSlot === 1 ? hud.primaryWeaponName : (hud.secondaryWeaponName ?? 'Міні-арта');
+
+    if (activeReloadLeft > 0 && activeReloadTotal > 0) {
+      const readyRatio = 1 - Math.max(0, Math.min(1, activeReloadLeft / activeReloadTotal));
+      sniperReloadFillEl.style.width = `${(readyRatio * 100).toFixed(1)}%`;
+      sniperReloadTextEl.textContent = `ПЕРЕЗАРЯДКА ${activeReloadLeft.toFixed(1)}с`;
+    } else {
+      sniperReloadFillEl.style.width = '100%';
+      sniperReloadTextEl.textContent = 'ГОТОВИЙ';
+    }
+  } else {
+    sniperOverlayEl.classList.add('hidden');
+    arcadeReticleEl.classList.remove('hidden');
+
+    if (activeReloadLeft > 0) {
+      reticleReloadTextEl.textContent = `${activeReloadLeft.toFixed(1)}с`;
+      reticleReloadTextEl.style.color = '#ef4444';
+    } else {
+      reticleReloadTextEl.textContent = 'ГОТОВИЙ';
+      reticleReloadTextEl.style.color = 'var(--wot-green)';
+    }
+  }
+
+  // 7. Tactical WoT Minimap
+  renderMinimap(hud);
+}
+
+// ============================================================================
+// Reticle & Turret Aim Offset
+// ============================================================================
+
+function updateTurretAimRing(offset: TurretAimScreenOffset): void {
+  if (currentScreen !== 'battle') return;
+  // Offset in pixels relative to center crosshair
+  const dx = offset.dxPx ?? (offset as { dx?: number }).dx ?? 0;
+  const dy = offset.dyPx ?? (offset as { dy?: number }).dy ?? 0;
+  // Notice: .turret-aim-ring already has margin-top: -27px; margin-left: -27px in CSS,
+  // so translating by dx, dy keeps it exactly centered when dx=0, dy=0!
+  turretAimRingEl.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`;
+}
+
+// ============================================================================
+// 2D Enemy Markers in 3D (Plates Pooling)
+// ============================================================================
+
+function updateEnemyPlates(plates: EnemyPlateScreenItem[]): void {
+  if (currentScreen !== 'battle' || plates.length === 0) {
+    clearEnemyPlates();
+    return;
+  }
+
+  for (let i = 0; i < plates.length; i++) {
+    const p = plates[i];
+    let el = enemyPlatePool[i];
+
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'enemy-plate';
+      el.innerHTML = `
+        <div class="enemy-plate-header">
+          <span class="enemy-plate-tier"></span>
+          <span class="enemy-plate-name"></span>
+        </div>
+        <div class="enemy-plate-bar">
+          <div class="enemy-plate-fill"></div>
+        </div>
+      `;
+      enemyPlatesContainer.appendChild(el);
+      enemyPlatePool.push(el);
+    }
+
+    el.style.display = '';
+
+    const px = p.screenX ?? (p as { x?: number }).x ?? 0;
+    const py = p.screenY ?? (p as { y?: number }).y ?? 0;
+    el.style.transform = `translate(-50%, -100%) translate(${px.toFixed(1)}px, ${py.toFixed(1)}px)`;
+
+    const tierEl = el.querySelector('.enemy-plate-tier') as HTMLElement;
+    const nameEl = el.querySelector('.enemy-plate-name') as HTMLElement;
+    const fillEl = el.querySelector('.enemy-plate-fill') as HTMLElement;
+
+    if (tierEl) tierEl.textContent = p.romanTier;
+    if (nameEl) nameEl.textContent = p.name;
+
+    const hpPercent = p.maxHp > 0 ? (p.hp / p.maxHp) * 100 : 0;
+    if (fillEl) {
+      fillEl.style.width = `${Math.max(0, Math.min(100, hpPercent)).toFixed(1)}%`;
+    }
+  }
+
+  // Hide remaining unused plates in pool
+  for (let i = plates.length; i < enemyPlatePool.length; i++) {
+    enemyPlatePool[i].style.display = 'none';
+  }
+}
+
+function clearEnemyPlates(): void {
+  for (const el of enemyPlatePool) {
+    el.style.display = 'none';
+  }
+}
+
+// ============================================================================
+// Floating Combat Text
+// ============================================================================
+
+function createFloatingText(item: FloatingTextItem): void {
+  const el = document.createElement('div');
+  el.className = 'floating-text' + (item.big ? ' crit' : '');
+  el.textContent = item.text;
+  el.style.left = `${item.x.toFixed(1)}px`;
+  el.style.top = `${item.y.toFixed(1)}px`;
+  if (item.color) {
+    el.style.color = item.color;
+  }
+  floatingTextsContainer.appendChild(el);
+
+  window.setTimeout(() => {
+    el.remove();
+  }, 950);
+}
+
+// ============================================================================
+// Wave Announcement Banner
+// ============================================================================
+
+function showWaveBanner(title: string, sub: string): void {
+  if (waveBannerTimer !== null) {
+    window.clearTimeout(waveBannerTimer);
+  }
+
+  waveBannerTitleEl.textContent = title;
+  waveBannerSubEl.textContent = sub;
+  waveBannerEl.classList.remove('hidden');
+
+  waveBannerTimer = window.setTimeout(() => {
+    waveBannerEl.classList.add('hidden');
+    waveBannerTimer = null;
+  }, 2400);
+}
+
+// ============================================================================
+// Tactical Radar Minimap Drawing (168x168)
+// ============================================================================
+
+function renderMinimap(hud: HudState): void {
+  if (!minimapCtx) return;
+  const ctx = minimapCtx;
+  const w = 168;
+  const h = 168;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Background
+  ctx.fillStyle = 'rgba(8, 12, 18, 0.94)';
+  ctx.fillRect(0, 0, w, h);
+
+  // Tactical Grid 3x3
+  ctx.strokeStyle = 'rgba(148, 163, 184, 0.16)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(w / 3, 0);
+  ctx.lineTo(w / 3, h);
+  ctx.moveTo((w * 2) / 3, 0);
+  ctx.lineTo((w * 2) / 3, h);
+  ctx.moveTo(0, h / 3);
+  ctx.lineTo(w, h / 3);
+  ctx.moveTo(0, (h * 2) / 3);
+  ctx.lineTo(w, (h * 2) / 3);
+  ctx.stroke();
+
+  const halfSize = Math.max(10, hud.worldHalfSize || 45);
+  const cx = w / 2;
+  const cy = h / 2;
+  const scale = (w * 0.46) / halfSize;
+
+  const toMapX = (worldX: number) => cx + worldX * scale;
+  const toMapY = (worldZ: number) => cy + worldZ * scale;
+
+  const playerEnt = Array.isArray(hud.minimapEntities)
+    ? hud.minimapEntities.find((e) => e.kind === 'player')
+    : undefined;
+  const px = playerEnt ? toMapX(playerEnt.x) : cx;
+  const py = playerEnt ? toMapY(playerEnt.z) : cy;
+
+  // Camera field of view cone (semi-transparent green fan)
+  const camAngle = Math.PI / 2 - hud.cameraYaw;
+  ctx.fillStyle = 'rgba(0, 255, 133, 0.12)';
+  ctx.beginPath();
+  ctx.moveTo(px, py);
+  ctx.arc(px, py, 45, camAngle - 0.45, camAngle + 0.45);
+  ctx.closePath();
+  ctx.fill();
+
+  // Draw minimap entities
+  if (Array.isArray(hud.minimapEntities)) {
+    for (const ent of hud.minimapEntities) {
+      if (ent.kind === 'player') continue;
+      const ex = toMapX(ent.x);
+      const ey = toMapY(ent.z);
+
+      if (ent.kind === 'enemy') {
+        // Red Diamond
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.moveTo(ex, ey - 4);
+        ctx.lineTo(ex + 4, ey);
+        ctx.lineTo(ex, ey + 4);
+        ctx.lineTo(ex - 4, ey);
+        ctx.closePath();
+        ctx.fill();
+      } else if (ent.kind === 'boss') {
+        // Boss Diamond (Large gold-red)
+        ctx.fillStyle = '#f59e0b';
+        ctx.beginPath();
+        ctx.moveTo(ex, ey - 7);
+        ctx.lineTo(ex + 7, ey);
+        ctx.lineTo(ex, ey + 7);
+        ctx.lineTo(ex - 7, ey);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.arc(ex, ey, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (ent.kind === 'pickup') {
+        // Green bonus dot
+        ctx.fillStyle = '#10b981';
+        ctx.beginPath();
+        ctx.arc(ex, ey, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  // Draw Player Marker (Arrow pointing in hull direction)
+  const hullAngle = Math.PI - hud.hullYaw;
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(hullAngle);
+
+  ctx.fillStyle = '#00ff85';
+  ctx.strokeStyle = '#052e16';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, -7);
+  ctx.lineTo(5, 5);
+  ctx.lineTo(0, 2);
+  ctx.lineTo(-5, 5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+// ============================================================================
+// Modals & Battle Completion
+// ============================================================================
+
+function handleBattleEnd(summary: BattleSummary): void {
+  storage.recordBattleResult(summary);
+
+  resultTitleEl.textContent = summary.victory ? 'ПЕРЕМОГА!' : 'ПОРАЗКА!';
+  resultTitleEl.style.color = summary.victory ? 'var(--wot-gold)' : 'var(--wot-red)';
+  resultSubtitleEl.textContent = summary.victory
+    ? summary.mode === 'duel'
+      ? 'Чемпіона розгромлено! Блискуча дуельна перемога!'
+      : 'Хвилю успішно відбито! Позиції збережено.'
+    : 'Твій танк підбито ворожими снарядами.';
+
+  resWaveEl.textContent = summary.waveReached.toString();
+  resKillsEl.textContent = summary.kills.toString();
+  resDamageEl.textContent = summary.damageDealt.toString();
+  resCoinsEl.textContent = `+${summary.coinsEarned} 🪙`;
+  resScoreEl.textContent = summary.score.toString();
+
+  btnPlayAgain.textContent = summary.mode === 'duel' ? '⚔️ Нова дуель' : '⚔️ Наступний бій';
+
+  setScreen('result');
+
+  if (summary.victory) {
+    sound.playVictory();
+  } else {
+    sound.playGameOver();
+  }
+}
+
+// Pause button & hotkey
+function togglePause(): void {
+  if (currentScreen === 'battle') {
+    game.setPaused(true);
+    setScreen('pause');
+  } else if (currentScreen === 'pause') {
+    game.setPaused(false);
+    setScreen('battle');
+  }
+}
+
+btnPauseHud.addEventListener('click', togglePause);
 btnResume.addEventListener('click', () => {
-  sound.playUiClick();
   game.setPaused(false);
+  setScreen('battle');
 });
 
 btnRestart.addEventListener('click', () => {
-  sound.playUiClick();
-  pauseScreen.classList.add('hidden');
-  syncTouchVisibility(true);
-  if (currentMode === 'horde') {
-    game.startHordeRun();
-  } else {
-    game.startStage(activeStage);
+  game.restartCurrentBattle();
+  setScreen('battle');
+});
+
+btnToHangar.addEventListener('click', () => {
+  game.returnToHangar();
+  setScreen('hangar');
+});
+
+// Result modal actions
+btnPlayAgain.addEventListener('click', () => {
+  launchBattle(lastBattleMode);
+});
+
+btnResultHangar.addEventListener('click', () => {
+  game.returnToHangar();
+  setScreen('hangar');
+});
+
+// ============================================================================
+// Action Bar & Touch Controls Listeners
+// ============================================================================
+
+// Weapon slot 1
+slotWeapon1El.addEventListener('click', () => {
+  input.requestWeaponSlot(1);
+  sound.playWeaponSwitch(1);
+});
+btnTouchW1.addEventListener('click', () => {
+  input.requestWeaponSlot(1);
+  sound.playWeaponSwitch(1);
+});
+
+// Weapon slot 2 (Mini-artillery)
+slotWeapon2El.addEventListener('click', () => {
+  input.requestWeaponSlot(2);
+  sound.playWeaponSwitch(2);
+});
+btnTouchW2.addEventListener('click', () => {
+  input.requestWeaponSlot(2);
+  sound.playWeaponSwitch(2);
+});
+
+// Repair Kit
+slotRepairEl.addEventListener('click', () => {
+  input.requestRepair();
+});
+btnTouchRepair.addEventListener('click', () => {
+  input.requestRepair();
+});
+
+// Sniper toggle buttons
+btnSniperHud.addEventListener('click', () => {
+  input.toggleSniperTouch();
+});
+btnTouchSniper.addEventListener('click', () => {
+  input.toggleSniperTouch();
+});
+
+// Touch Fire Button (Hold to fire)
+btnTouchFire.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  input.triggerFireStart();
+  try {
+    btnTouchFire.setPointerCapture(e.pointerId);
+  } catch {
+    // Safe fallback
   }
 });
 
-const returnToMenu = () => {
-  sound.playUiClick();
-  pauseScreen.classList.add('hidden');
-  victoryScreen.classList.add('hidden');
-  gameoverScreen.classList.add('hidden');
-  hangarScreen.classList.add('hidden');
-  hudEl.classList.add('hidden');
-  buffsBarEl.classList.add('hidden');
-  bossBarEl.classList.add('hidden');
-  stageBannerEl.classList.add('hidden');
-  radarLayerEl.innerHTML = '';
-  syncTouchVisibility(false);
-
-  selectedStage = storage.getData().unlockedStage;
-  refreshMenuUi();
-  menuScreen.classList.remove('hidden');
-  game.showMenuPreview(selectedStage);
+const releaseTouchFire = (e: PointerEvent) => {
+  input.triggerFireEnd();
+  try {
+    btnTouchFire.releasePointerCapture(e.pointerId);
+  } catch {
+    // Safe fallback
+  }
 };
 
-btnQuit.addEventListener('click', returnToMenu);
-btnGameoverMenu.addEventListener('click', returnToMenu);
+btnTouchFire.addEventListener('pointerup', releaseTouchFire);
+btnTouchFire.addEventListener('pointercancel', releaseTouchFire);
 
-// Start game
-btnStart.addEventListener('click', () => {
-  sound.unlock();
-  sound.playUiClick();
-  menuScreen.classList.add('hidden');
-  hudEl.classList.remove('hidden');
-  syncTouchVisibility(true);
-
-  if (currentMode === 'horde') {
-    game.startHordeRun();
-  } else {
-    game.startCampaignRun(selectedStage);
+// Global hotkeys (KeyM for Sound mute)
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyM' && !e.repeat) {
+    toggleMute();
   }
 });
 
-// Next Stage & Retry
-btnNextStage.addEventListener('click', () => {
-  sound.playUiClick();
-  victoryScreen.classList.add('hidden');
-  syncTouchVisibility(true);
-  game.startStage(activeStage + 1);
+// Window resize
+window.addEventListener('resize', () => {
+  game.handleResize();
 });
 
-btnRetry.addEventListener('click', () => {
-  sound.playUiClick();
-  gameoverScreen.classList.add('hidden');
-  syncTouchVisibility(true);
-  if (currentMode === 'horde') {
-    game.startHordeRun();
-  } else {
-    game.startCampaignRun(activeStage);
-  }
-});
-
-// Hangar buttons
-btnOpenHangar.addEventListener('click', openHangar);
-btnVictoryHangar.addEventListener('click', openHangar);
-btnGameoverHangar.addEventListener('click', openHangar);
-btnCloseHangar.addEventListener('click', closeHangar);
-
 // ============================================================================
-// PWA Install Prompt Handling & SW Registration
+// PWA Installation & Service Worker Registration
 // ============================================================================
-
-let deferredPrompt: BeforeInstallPromptEvent | null = null;
 
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
-  deferredPrompt = e as BeforeInstallPromptEvent;
+  deferredInstallPrompt = e as BeforeInstallPromptEvent;
   btnInstall.classList.remove('hidden');
 });
 
 btnInstall.addEventListener('click', async () => {
-  if (!deferredPrompt) return;
-  sound.playUiClick();
-  await deferredPrompt.prompt();
-  const choice = await deferredPrompt.userChoice;
-  if (choice.outcome === 'accepted') {
-    btnInstall.classList.add('hidden');
+  if (!deferredInstallPrompt) return;
+  try {
+    await deferredInstallPrompt.prompt();
+    const outcome = await deferredInstallPrompt.userChoice;
+    if (outcome.outcome === 'accepted') {
+      btnInstall.classList.add('hidden');
+    }
+  } catch {
+    // Safe fallback
   }
-  deferredPrompt = null;
+  deferredInstallPrompt = null;
 });
 
 window.addEventListener('appinstalled', () => {
   btnInstall.classList.add('hidden');
-  deferredPrompt = null;
+  deferredInstallPrompt = null;
 });
 
+// Register Service Worker for offline PWA
 registerSW({
   immediate: true,
   onOfflineReady() {
-    offlineBadge.textContent = '✓ Готово до гри офлайн';
+    if (offlineBadgeEl) {
+      offlineBadgeEl.textContent = '⚡ Офлайн-режим готовий';
+      offlineBadgeEl.classList.add('ready');
+    }
   }
 });
+
+// Initial Hangar UI Render
+renderHangar();

@@ -1,142 +1,156 @@
-export type GameModeKind = 'campaign' | 'horde';
+export type GameModeKind = 'waves' | 'duel';
 
-export type CameraMode = 'angled' | 'top' | 'follow';
+export type MapBiomeId = 'hills' | 'desert' | 'arctic';
 
-export type BiomeId = 'industrial' | 'desert' | 'arctic' | 'volcanic';
+export type TankTierId = 'tier1' | 'tier2' | 'tier3' | 'tier4' | 'tier5';
 
-export type TankClassId = 'allrounder' | 'apc' | 'rocket' | 'railgun';
+export type WeaponSlot = 1 | 2;
 
-export type EnemyKind = 'basic' | 'fast' | 'power' | 'armor';
+export type ProjectileStyle = 'ap' | 'heavy' | 'he' | 'electric' | 'mini_artillery';
 
-export type BossId = 'mammoth' | 'artillery' | 'cryo' | 'inferno';
-
-export type PowerUpKind = 'star' | 'shield' | 'clock' | 'shovel' | 'grenade' | 'life' | 'repair';
-
-export enum SubTile {
-  Empty = 0,
-  Brick = 1,
-  Steel = 2,
-  Water = 3,
-  Forest = 4,
-  Ice = 5,
-  Base = 6
-}
+export type PowerUpKind = 'repair' | 'damage' | 'speed' | 'shield';
 
 export interface TankUpgradeLevels {
-  armor: number;    // 0..5
-  damage: number;   // 0..5
-  fireRate: number; // 0..5
-  speed: number;    // 0..5
+  hp: number;     // 0..5
+  damage: number; // 0..5
+  reload: number; // 0..5
+  speed: number;  // 0..5
 }
 
-export interface TankClassSpec {
-  id: TankClassId;
+export interface WeaponSpec {
+  slot: WeaponSlot;
+  name: string;
+  shortName: string;
+  damage: number;
+  reloadSec: number;
+  projectileSpeed: number;
+  projectileStyle: ProjectileStyle;
+  aoeRadius: number;
+  chainCount?: number;
+  chainRange?: number;
+  dispersionDeg: number;
+}
+
+export interface TankTierSpec {
+  id: TankTierId;
+  tierNumber: 1 | 2 | 3 | 4 | 5;
+  romanTier: 'I' | 'II' | 'III' | 'IV' | 'V';
+  classLabel: string;
   name: string;
   subtitle: string;
   description: string;
   unlockCost: number;
   baseHp: number;
-  baseDamage: number;
-  baseReload: number;
   baseSpeed: number;
-  bulletSpeed: number;
-  maxActiveBullets: number;
-  aoeRadius: number;
-  piercing: boolean;
-  breaksSteelBase: boolean;
+  reverseSpeed: number;
+  hullTurnSpeed: number;
+  turretTurnSpeed: number;
+  hullScaleLength: number;
+  hullScaleWidth: number;
   hullColor: number;
   turretColor: number;
+  accentColor: number;
+  primaryWeapon: WeaponSpec;
+  secondaryWeapon?: WeaponSpec;
+}
+
+export interface ComputedWeaponStats {
+  slot: WeaponSlot;
+  name: string;
+  shortName: string;
+  damage: number;
+  reloadSec: number;
+  projectileSpeed: number;
+  projectileStyle: ProjectileStyle;
+  aoeRadius: number;
+  chainCount?: number;
+  chainRange?: number;
+  dispersionDeg: number;
 }
 
 export interface ComputedTankStats {
   maxHp: number;
-  damage: number;
-  reloadDelay: number;
   speed: number;
-  bulletSpeed: number;
-  maxActiveBullets: number;
-  aoeRadius: number;
-  piercing: boolean;
-  breaksSteel: boolean;
+  reverseSpeed: number;
+  hullTurnSpeed: number;
+  turretTurnSpeed: number;
+  primaryWeapon: ComputedWeaponStats;
+  secondaryWeapon: ComputedWeaponStats | null;
+}
+
+export interface MapDefinition {
+  id: MapBiomeId;
+  name: string;
+  subtitle: string;
+  skyColor: number;
+  fogColor: number;
+  groundColor: number;
+  hillColor: number;
 }
 
 export interface SaveData {
   coins: number;
-  selectedClass: TankClassId;
-  unlockedClasses: TankClassId[];
-  tankUpgrades: Record<TankClassId, TankUpgradeLevels>;
-  baseHpLevel: number; // 0..5
+  selectedTank: TankTierId;
+  unlockedTanks: TankTierId[];
+  tankUpgrades: Record<TankTierId, TankUpgradeLevels>;
+  selectedMap: MapBiomeId;
+  testDriveEnabled: boolean;
+  bestWave: number;
   bestScore: number;
-  bestHordeWave: number;
-  unlockedStage: number;
+  duelWins: number;
   totalKills: number;
   muted: boolean;
-  cameraMode: CameraMode;
   touchEnabled: boolean | null;
 }
 
-export interface BossSpec {
-  id: BossId;
-  name: string;
-  maxHp: number;
-  speed: number;
-  contactDamage: number;
-  rewardCoins: number;
-  points: number;
-}
-
-export interface BarrelSpawn {
+export interface MinimapEntity {
+  kind: 'player' | 'enemy' | 'boss' | 'pickup';
   x: number;
   z: number;
-}
-
-export interface StageDefinition {
-  id: number;
-  name: string;
-  biome: BiomeId;
-  /** 18 rows of 18 chars (macro-grid 18x18 -> sub-grid 36x36, world -18..+18) */
-  layout: string[];
-  enemies: EnemyKind[];
-  boss?: BossSpec;
-}
-
-export interface StageKills {
-  basic: number;
-  fast: number;
-  power: number;
-  armor: number;
-  boss: number;
+  yaw?: number;
 }
 
 export interface HudState {
   mode: GameModeKind;
-  stageOrWave: number;
-  stageName: string;
-  biome: BiomeId;
+  mapId: MapBiomeId;
+  mapName: string;
+  waveNumber: number;
   enemiesRemaining: number;
-  lives: number;
+  totalKillsInRun: number;
+  score: number;
+  bestWave: number;
+  coins: number;
+  coinsEarnedInRun: number;
   playerHp: number;
   playerMaxHp: number;
-  baseHp: number;
-  baseMaxHp: number;
-  stars: number;
-  score: number;
-  bestScore: number;
-  coins: number;
-  shieldTimer: number;
-  freezeTimer: number;
-  shovelTimer: number;
+  speedKmh: number;
+  activeWeaponSlot: WeaponSlot;
+  hasSecondaryWeapon: boolean;
+  primaryWeaponName: string;
+  secondaryWeaponName: string | null;
+  primaryReloadLeft: number;
+  primaryReloadTotal: number;
+  secondaryReloadLeft: number;
+  secondaryReloadTotal: number;
+  repairCooldownLeft: number;
+  repairCooldownTotal: number;
+  isSniper: boolean;
+  sniperZoom: number;
+  aimDistanceMeters: number;
+  targetEnemyName: string | null;
+  targetEnemyHp: number;
+  targetEnemyMaxHp: number;
   bossName: string | null;
   bossHp: number;
   bossMaxHp: number;
-}
-
-export interface RadarIndicator {
-  kind: 'base' | 'boss' | 'enemy';
-  x: number;
-  y: number;
-  angleRad: number;
-  urgent?: boolean;
+  damageBoostTimer: number;
+  shieldTimer: number;
+  testDriveActive: boolean;
+  worldHalfSize: number;
+  cameraYaw: number;
+  hullYaw: number;
+  turretYaw: number;
+  minimapEntities: MinimapEntity[];
 }
 
 export interface FloatingTextItem {
@@ -145,4 +159,15 @@ export interface FloatingTextItem {
   text: string;
   color: string;
   big?: boolean;
+}
+
+export interface BattleSummary {
+  victory: boolean;
+  mode: GameModeKind;
+  waveReached: number;
+  kills: number;
+  damageDealt: number;
+  coinsEarned: number;
+  score: number;
+  isNewBestWave: boolean;
 }
