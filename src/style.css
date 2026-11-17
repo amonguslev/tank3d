@@ -1365,7 +1365,6 @@ body,
   z-index: 28;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   pointer-events: none;
 }
 
@@ -1386,6 +1385,7 @@ body,
 .hangar-top-bar {
   position: relative;
   z-index: 15;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1617,6 +1617,7 @@ body,
 .hangar-sub-bar {
   position: relative;
   z-index: 15;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1688,11 +1689,12 @@ body,
 
 /* Right Side: Tank Info & Upgrade Card */
 .hangar-tank-card {
-  position: fixed;
-  top: 110px;
-  right: 20px;
+  position: relative;
+  align-self: flex-end;
+  margin: 4px 20px 8px auto;
+  flex: 0 1 auto;
+  min-height: 0;
   width: min(340px, calc(100vw - 32px));
-  max-height: calc(100vh - 250px);
   overflow-y: auto;
   z-index: 15;
   background: var(--wot-armor-panel);
@@ -1995,6 +1997,8 @@ body,
 .hangar-carousel-wrap {
   position: relative;
   z-index: 15;
+  flex-shrink: 0;
+  margin-top: auto;
   padding: 10px 20px 14px;
   background: linear-gradient(0deg, rgba(8, 11, 16, 0.98) 0%, rgba(10, 14, 20, 0.8) 75%, transparent 100%);
   pointer-events: auto;
@@ -2281,12 +2285,11 @@ body,
   }
 
   .hangar-tank-card {
-    position: fixed;
-    top: auto;
-    bottom: 120px;
-    right: 12px;
+    position: relative;
+    align-self: center;
+    margin: 6px auto;
     width: calc(100vw - 24px);
-    max-height: 40vh;
+    max-height: 38vh;
   }
 }
 
