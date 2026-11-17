@@ -77,15 +77,17 @@ export const CAMO_SPECS: Record<TankCamoId, TankCamoSpec> = {
     id: 'black_red',
     name: 'Черв.-чорний',
     cost: 400,
-    previewBg: 'linear-gradient(135deg, #09090b 45%, #dc2626 100%)',
-    hullColor: 0x111114,
-    turretColor: 0x991b1b,
+    previewBg: 'linear-gradient(135deg, #09090b 40%, #ef4444 100%)',
+    hullColor: 0x0b0b0f,
+    turretColor: 0x141418,
     trimColor: 0xef4444,
     armorDarkColor: 0x09090b,
+    emissiveColor: 0xdc2626,
+    emissiveIntensity: 0.65,
     headlightColor: 0xfca5a5,
-    headlightEmissive: 0xdc2626,
-    metalness: 0.65,
-    roughness: 0.32
+    headlightEmissive: 0xef4444,
+    metalness: 0.75,
+    roughness: 0.28
   },
   vip_gold: {
     id: 'vip_gold',
