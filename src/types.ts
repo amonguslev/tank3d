@@ -6,6 +6,25 @@ export type MapBiomeId = 'hills' | 'desert' | 'arctic';
 
 export type TankTierId = 'tier1' | 'tier2' | 'tier3' | 'tier4' | 'tier5';
 
+export type TankCamoId = 'default' | 'forest' | 'desert' | 'arctic' | 'vip_gold' | 'neon_cyber';
+
+export interface TankCamoSpec {
+  id: TankCamoId;
+  name: string;
+  cost: number;
+  previewBg: string; // CSS background/gradient для свотча
+  hullColor?: number;
+  turretColor?: number;
+  trimColor?: number;
+  armorDarkColor?: number;
+  metalness?: number;
+  roughness?: number;
+  emissiveColor?: number;
+  emissiveIntensity?: number;
+  headlightColor?: number;
+  headlightEmissive?: number;
+}
+
 export type WeaponSlot = 1 | 2;
 
 export type ProjectileStyle = 'ap' | 'heavy' | 'he' | 'electric' | 'mini_artillery';
@@ -95,6 +114,9 @@ export interface SaveData {
   selectedTank: TankTierId;
   unlockedTanks: TankTierId[];
   tankUpgrades: Record<TankTierId, TankUpgradeLevels>;
+  unlockedCamos: TankCamoId[];
+  selectedCamo: TankCamoId;
+  tankCamos: Record<TankTierId, TankCamoId>;
   selectedMap: MapBiomeId;
   testDriveEnabled: boolean;
   bestWave: number;

@@ -2,6 +2,8 @@ import './style.css';
 import { registerSW } from 'virtual:pwa-register';
 import { SoundEngine } from './audio';
 import {
+  CAMO_ORDER,
+  CAMO_SPECS,
   computeTankStats,
   getUpgradeCost,
   MAP_DEFINITIONS,
@@ -24,6 +26,7 @@ import type {
   GameModeKind,
   HudState,
   MapBiomeId,
+  TankCamoId,
   TankTierId,
   TankUpgradeLevels
 } from './types';
@@ -162,6 +165,8 @@ const btnUnlockTank = document.getElementById('btn-unlock-tank') as HTMLButtonEl
 const hangarTankDescEl = document.getElementById('hangar-tank-desc') as HTMLElement;
 const hangarWeaponsInfoEl = document.getElementById('hangar-weapons-info') as HTMLElement;
 const upgradesListEl = document.getElementById('upgrades-list') as HTMLElement;
+const camoSelectedNameEl = document.getElementById('camo-selected-name') as HTMLElement | null;
+const camoGridEl = document.getElementById('camo-grid') as HTMLElement | null;
 const tankCarouselEl = document.getElementById('tank-carousel') as HTMLElement;
 
 // Pause Modal
@@ -295,7 +300,7 @@ function setScreen(mode: ScreenMode): void {
 
 function selectHangarTank(tierId: TankTierId): void {
   inspectedTank = tierId;
-  game.setHangarTank(tierId);
+  game.setHangarTank(tierId, storage.getSelectedCamo(tierId));
 
   const data = storage.getData();
   if (data.unlockedTanks.includes(tierId) || data.testDriveEnabled) {
@@ -449,7 +454,80 @@ function renderHangar(): void {
     upgradesListEl.appendChild(row);
   }
 
-  // 5. Tank Carousel (5 WoT Tanks I..V)
+  // 5. Camouflage & Tuning
+  const activeCamoId = storage.getSelectedCamo(inspectedTank);
+  const activeCamoSpec = CAMO_SPECS[activeCamoId] ?? CAMO_SPECS.default;
+  if (camoSelectedNameEl) {
+    camoSelectedNameEl.textContent = activeCamoSpec.name;
+  }
+
+  if (camoGridEl) {
+    camoGridEl.innerHTML = '';
+    for (const camoId of CAMO_ORDER) {
+      const camo = CAMO_SPECS[camoId];
+      if (!camo) continue;
+
+      const isUnlocked = storage.isCamoUnlocked(camoId);
+      const isActive = camoId === activeCamoId;
+      const canAfford = data.coins >= camo.cost;
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      let classNames = 'camo-btn';
+      if (isActive) {
+        classNames += ' is-active';
+      } else if (!isUnlocked) {
+        classNames += ' is-locked';
+        if (!canAfford) {
+          classNames += ' is-cant-afford';
+        }
+      }
+      btn.className = classNames;
+
+      let statusHtml = '';
+      if (isActive) {
+        statusHtml = '<span class="camo-status">✓</span>';
+        btn.title = `${camo.name} (Активний)`;
+      } else if (isUnlocked) {
+        statusHtml = '<span class="camo-status">Обрати</span>';
+        btn.title = `Обрати ${camo.name}`;
+      } else {
+        statusHtml = `<span class="camo-status">🪙 ${camo.cost}</span>`;
+        btn.title = canAfford
+          ? `Розблокувати ${camo.name} за 🪙 ${camo.cost}`
+          : `Недостатньо срібла (потрібно 🪙 ${camo.cost})`;
+      }
+
+      btn.innerHTML = `
+        <div class="camo-swatch" style="background: ${camo.previewBg}"></div>
+        <span class="camo-name">${camo.name}</span>
+        ${statusHtml}
+      `;
+
+      btn.addEventListener('click', () => {
+        if (isActive) return;
+
+        if (isUnlocked) {
+          storage.selectCamo(camo.id, inspectedTank);
+          game.setHangarTank(inspectedTank, camo.id);
+          sound.playUiClick();
+          renderHangar();
+        } else {
+          if (canAfford) {
+            if (storage.unlockCamo(camo.id, camo.cost, inspectedTank)) {
+              sound.playRepair();
+              game.setHangarTank(inspectedTank, camo.id);
+              renderHangar();
+            }
+          }
+        }
+      });
+
+      camoGridEl.appendChild(btn);
+    }
+  }
+
+  // 6. Tank Carousel (5 WoT Tanks I..V)
   tankCarouselEl.innerHTML = '';
   for (const tierId of TANK_TIER_ORDER) {
     const tSpec = TANK_SPECS[tierId];

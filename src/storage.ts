@@ -1,5 +1,5 @@
-import { MAP_ORDER, MAX_UPGRADE_LEVEL, TANK_SPECS, TANK_TIER_ORDER } from './classes';
-import type { BattleSummary, MapBiomeId, SaveData, TankTierId, TankUpgradeLevels } from './types';
+import { CAMO_ORDER, MAP_ORDER, MAX_UPGRADE_LEVEL, TANK_SPECS, TANK_TIER_ORDER } from './classes';
+import type { BattleSummary, MapBiomeId, SaveData, TankCamoId, TankTierId, TankUpgradeLevels } from './types';
 
 const STORAGE_KEY_V3 = 'tank_3d_wot_save_v3';
 const STORAGE_KEY_V2 = 'tank_3d_pwa_save_v2';
@@ -34,6 +34,15 @@ function createDefaultSave(): SaveData {
       tier3: createDefaultUpgrades(),
       tier4: createDefaultUpgrades(),
       tier5: createDefaultUpgrades()
+    },
+    unlockedCamos: ['default'],
+    selectedCamo: 'default',
+    tankCamos: {
+      tier1: 'default',
+      tier2: 'default',
+      tier3: 'default',
+      tier4: 'default',
+      tier5: 'default'
     },
     selectedMap: 'hills',
     testDriveEnabled: false,
@@ -94,11 +103,49 @@ export class StorageManager {
             ? parsed.selectedMap
             : 'hills';
 
+        const unlockedCamos: TankCamoId[] = Array.isArray(parsed.unlockedCamos)
+          ? parsed.unlockedCamos.filter((c): c is TankCamoId => typeof c === 'string' && CAMO_ORDER.includes(c as TankCamoId))
+          : ['default'];
+        if (!unlockedCamos.includes('default')) {
+          unlockedCamos.unshift('default');
+        }
+
+        const selectedCamo: TankCamoId =
+          parsed.selectedCamo &&
+          CAMO_ORDER.includes(parsed.selectedCamo) &&
+          unlockedCamos.includes(parsed.selectedCamo)
+            ? parsed.selectedCamo
+            : 'default';
+
+        const sanitizeCamoRecord = (raw?: Partial<Record<TankTierId, TankCamoId>>): Record<TankTierId, TankCamoId> => {
+          const res: Record<TankTierId, TankCamoId> = {
+            tier1: 'default',
+            tier2: 'default',
+            tier3: 'default',
+            tier4: 'default',
+            tier5: 'default'
+          };
+          for (const t of TANK_TIER_ORDER) {
+            const val = raw?.[t];
+            if (val && CAMO_ORDER.includes(val) && unlockedCamos.includes(val)) {
+              res[t] = val;
+            } else {
+              res[t] = selectedCamo;
+            }
+          }
+          return res;
+        };
+
+        const tankCamos = sanitizeCamoRecord(parsed.tankCamos);
+
         return {
           coins: typeof parsed.coins === 'number' && parsed.coins >= 0 ? parsed.coins : 200,
           selectedTank,
           unlockedTanks,
           tankUpgrades,
+          unlockedCamos,
+          selectedCamo,
+          tankCamos,
           selectedMap,
           testDriveEnabled: Boolean(parsed.testDriveEnabled),
           bestWave: typeof parsed.bestWave === 'number' && parsed.bestWave >= 0 ? parsed.bestWave : 0,
@@ -193,6 +240,10 @@ export class StorageManager {
     }
   }
 
+  save(): void {
+    this.persist();
+  }
+
   private getHighestUnlockedTank(): TankTierId {
     for (let i = TANK_TIER_ORDER.length - 1; i >= 0; i--) {
       const tier = TANK_TIER_ORDER[i];
@@ -254,6 +305,55 @@ export class StorageManager {
     if (this.data.unlockedTanks.includes(tierId) || this.data.testDriveEnabled) {
       this.data.selectedTank = tierId;
       this.persist();
+      return true;
+    }
+    return false;
+  }
+
+  isCamoUnlocked(camoId: TankCamoId): boolean {
+    return Array.isArray(this.data.unlockedCamos) && this.data.unlockedCamos.includes(camoId);
+  }
+
+  getSelectedCamo(tierId?: TankTierId): TankCamoId {
+    const targetTier = tierId || this.data.selectedTank;
+    return this.data.tankCamos?.[targetTier] || this.data.selectedCamo || 'default';
+  }
+
+  selectCamo(camoId: TankCamoId, tierId?: TankTierId): boolean {
+    if (!this.isCamoUnlocked(camoId)) {
+      return false;
+    }
+    this.data.selectedCamo = camoId;
+    const targetTier = tierId || this.data.selectedTank;
+    if (!this.data.tankCamos) {
+      this.data.tankCamos = {
+        tier1: 'default',
+        tier2: 'default',
+        tier3: 'default',
+        tier4: 'default',
+        tier5: 'default'
+      };
+    }
+    this.data.tankCamos[targetTier] = camoId;
+    this.save();
+    return true;
+  }
+
+  unlockCamo(camoId: TankCamoId, cost: number, tierId?: TankTierId): boolean {
+    if (!CAMO_ORDER.includes(camoId)) {
+      return false;
+    }
+    if (this.isCamoUnlocked(camoId)) {
+      this.selectCamo(camoId, tierId);
+      return true;
+    }
+    const price = Math.round(cost);
+    if (price <= 0 || this.spendCoins(price)) {
+      if (!this.data.unlockedCamos.includes(camoId)) {
+        this.data.unlockedCamos.push(camoId);
+      }
+      this.selectCamo(camoId, tierId);
+      this.save();
       return true;
     }
     return false;

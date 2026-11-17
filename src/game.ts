@@ -38,6 +38,7 @@ import type {
   MinimapEntity,
   PowerUpKind,
   ProjectileStyle,
+  TankCamoId,
   TankTierId,
   TeamBattleHudState,
   TeamRosterEntry,
@@ -319,7 +320,7 @@ export class TankGame3D {
     this.setHangarTank(targetTier);
   }
 
-  setHangarTank(tierId: TankTierId): void {
+  setHangarTank(tierId: TankTierId, camoId?: TankCamoId): void {
     this.hangarTierId = tierId;
 
     if (this.hangarRig) {
@@ -327,7 +328,8 @@ export class TankGame3D {
       this.hangarRig = null;
     }
 
-    const rig = createTankRig(tierId, { isEnemy: false, isBoss: false });
+    const activeCamo = camoId ?? this.storage.getSelectedCamo(tierId);
+    const rig = createTankRig(tierId, { isEnemy: false, isBoss: false, camoId: activeCamo });
     rig.root.position.set(0, 0.35, 0);
     this.hangarRig = rig;
     this.hangarScene.add(rig.root);
@@ -365,7 +367,8 @@ export class TankGame3D {
     this.playerMaxHp = this.playerStats.maxHp;
 
     // Player Rig
-    this.playerRig = createTankRig(tierId, { isEnemy: false, isBoss: false });
+    const playerCamo = this.storage.getSelectedCamo(tierId);
+    this.playerRig = createTankRig(tierId, { isEnemy: false, isBoss: false, camoId: playerCamo });
     this.battleScene.add(this.playerRig.root);
 
     // Initial position from spawn

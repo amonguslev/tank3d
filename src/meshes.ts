@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { TANK_SPECS } from './classes';
-import type { PowerUpKind, ProjectileStyle, TankTierId } from './types';
+import { CAMO_SPECS, TANK_SPECS } from './classes';
+import type { PowerUpKind, ProjectileStyle, TankCamoId, TankTierId } from './types';
 
 // ============================================================================
 // Types & Contracts
@@ -97,7 +97,7 @@ const sharedHazardTex = createHazardTexture();
 
 export function createTankRig(
   tierId: TankTierId,
-  options?: { isEnemy?: boolean; isBoss?: boolean; isAlly?: boolean; scaleOverride?: number }
+  options?: { isEnemy?: boolean; isBoss?: boolean; isAlly?: boolean; scaleOverride?: number; camoId?: TankCamoId }
 ): TankVisualRig {
   const isEnemy = !!options?.isEnemy;
   const isBoss = !!options?.isBoss;
@@ -112,6 +112,10 @@ export function createTankRig(
   let accentBaseColor = spec.accentColor;
   let metalness = 0.45;
   let roughness = 0.6;
+
+  const camo = (!isEnemy && !isBoss && !isAlly && options?.camoId && options.camoId !== 'default')
+    ? CAMO_SPECS[options.camoId]
+    : undefined;
 
   if (isBoss) {
     hullBaseColor = 0x111317; // Obsidian Black
@@ -131,6 +135,11 @@ export function createTankRig(
     accentBaseColor = 0x22c55e; // Vivid turquoise-green accent
     metalness = 0.5;
     roughness = 0.45;
+  } else if (camo) {
+    if (camo.hullColor !== undefined) hullBaseColor = camo.hullColor;
+    if (camo.turretColor !== undefined) turretBaseColor = camo.turretColor;
+    if (camo.metalness !== undefined) metalness = camo.metalness;
+    if (camo.roughness !== undefined) roughness = camo.roughness;
   }
 
   // Materials
@@ -171,6 +180,21 @@ export function createTankRig(
     roughness: 0.1,
     metalness: 0.1
   });
+
+  if (camo) {
+    metalTrimMat.color.setHex(camo.trimColor ?? 0x64748b);
+    armorDarkMat.color.setHex(camo.armorDarkColor ?? 0x1e293b);
+    if (camo.emissiveColor !== undefined && camo.emissiveIntensity !== undefined) {
+      metalTrimMat.emissive.setHex(camo.emissiveColor);
+      metalTrimMat.emissiveIntensity = camo.emissiveIntensity;
+    }
+    if (camo.headlightColor !== undefined) {
+      headlightMat.color.setHex(camo.headlightColor);
+    }
+    if (camo.headlightEmissive !== undefined) {
+      headlightMat.emissive.setHex(camo.headlightEmissive);
+    }
+  }
 
   const exhaustMat = new THREE.MeshStandardMaterial({
     color: 0x27272a,

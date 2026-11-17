@@ -1878,6 +1878,119 @@ body,
   cursor: default;
 }
 
+/* Camouflage & Tuning Section */
+.camo-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.camo-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.camo-title {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--wot-text-muted);
+}
+
+.camo-selected-name {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--wot-gold);
+}
+
+.camo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.camo-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(20, 27, 38, 0.75);
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.15s ease-out;
+  text-align: center;
+}
+
+.camo-btn:hover:not(:disabled) {
+  border-color: var(--wot-orange);
+  background: rgba(30, 42, 58, 0.85);
+  transform: translateY(-1px);
+}
+
+.camo-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  flex-shrink: 0;
+}
+
+.camo-name {
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.camo-status {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--wot-text-muted);
+}
+
+.camo-btn.is-active {
+  border-color: var(--wot-gold);
+  background: rgba(251, 191, 36, 0.15);
+  box-shadow: 0 0 10px rgba(251, 191, 36, 0.25);
+}
+
+.camo-btn.is-active .camo-swatch {
+  border-color: var(--wot-gold);
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.5);
+}
+
+.camo-btn.is-active .camo-status {
+  color: #86efac;
+}
+
+.camo-btn.is-locked {
+  opacity: 0.85;
+}
+
+.camo-btn.is-locked .camo-status {
+  color: var(--wot-gold);
+}
+
+.camo-btn.is-cant-afford {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.camo-btn.is-cant-afford .camo-status {
+  color: #f87171;
+}
+
 /* Bottom WoT Tank Carousel */
 .hangar-carousel-wrap {
   position: relative;

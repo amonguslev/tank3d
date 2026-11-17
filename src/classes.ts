@@ -3,6 +3,8 @@ import type {
   ComputedWeaponStats,
   MapBiomeId,
   MapDefinition,
+  TankCamoId,
+  TankCamoSpec,
   TankTierId,
   TankTierSpec,
   TankUpgradeLevels,
@@ -12,6 +14,81 @@ import type {
 export const MAX_UPGRADE_LEVEL = 5;
 
 export const TANK_TIER_ORDER: TankTierId[] = ['tier1', 'tier2', 'tier3', 'tier4', 'tier5'];
+
+export const CAMO_ORDER: TankCamoId[] = ['default', 'forest', 'desert', 'arctic', 'vip_gold', 'neon_cyber'];
+
+export const CAMO_SPECS: Record<TankCamoId, TankCamoSpec> = {
+  default: {
+    id: 'default',
+    name: 'Стандарт',
+    cost: 0,
+    previewBg: 'linear-gradient(135deg, #4b5563, #6b7280)'
+  },
+  forest: {
+    id: 'forest',
+    name: 'Лісовий',
+    cost: 250,
+    previewBg: 'linear-gradient(135deg, #1f3d1a, #4d7c0f)',
+    hullColor: 0x24421e,
+    turretColor: 0x2f5727,
+    trimColor: 0x3f6212,
+    roughness: 0.78,
+    metalness: 0.25
+  },
+  desert: {
+    id: 'desert',
+    name: 'Пустеля',
+    cost: 350,
+    previewBg: 'linear-gradient(135deg, #d4a373, #b45309)',
+    hullColor: 0xc2955d,
+    turretColor: 0xd4a373,
+    trimColor: 0x92400e,
+    roughness: 0.72,
+    metalness: 0.25
+  },
+  arctic: {
+    id: 'arctic',
+    name: 'Зимовий',
+    cost: 450,
+    previewBg: 'linear-gradient(135deg, #e2e8f0, #64748b)',
+    hullColor: 0xdbeafe,
+    turretColor: 0x94a3b8,
+    trimColor: 0x475569,
+    headlightColor: 0xbae6fd,
+    headlightEmissive: 0x38bdf8,
+    roughness: 0.55,
+    metalness: 0.35
+  },
+  vip_gold: {
+    id: 'vip_gold',
+    name: 'VIP Золото',
+    cost: 900,
+    previewBg: 'linear-gradient(135deg, #18181b 45%, #f59e0b 100%)',
+    hullColor: 0x141418,
+    turretColor: 0x1c1917,
+    trimColor: 0xf59e0b,
+    armorDarkColor: 0x27272a,
+    headlightColor: 0xfef08a,
+    headlightEmissive: 0xf59e0b,
+    metalness: 0.9,
+    roughness: 0.22
+  },
+  neon_cyber: {
+    id: 'neon_cyber',
+    name: 'Неон Кібер',
+    cost: 1200,
+    previewBg: 'linear-gradient(135deg, #0f172a 40%, #06b6d4 100%)',
+    hullColor: 0x0f172a,
+    turretColor: 0x1e1b4b,
+    trimColor: 0x06b6d4,
+    emissiveColor: 0x0891b2,
+    emissiveIntensity: 0.65,
+    headlightColor: 0x67e8f9,
+    headlightEmissive: 0x06b6d4,
+    metalness: 0.75,
+    roughness: 0.28
+  }
+};
 
 export const MAP_ORDER: MapBiomeId[] = ['hills', 'desert', 'arctic'];
 
