@@ -204,6 +204,17 @@ export function createTankRig(
 
   const teslaActiveMats: THREE.MeshStandardMaterial[] = [];
 
+  const energyBaseColor = (camo && (camo.emissiveColor !== undefined || camo.headlightEmissive !== undefined) && camo.trimColor !== undefined)
+    ? camo.trimColor
+    : 0x38bdf8;
+  const energyEmissiveColor = isEnemy
+    ? 0xef4444
+    : isAlly
+      ? 0x06b6d4
+      : (camo && (camo.emissiveColor !== undefined || camo.headlightEmissive !== undefined))
+        ? (camo.emissiveColor ?? camo.headlightEmissive!)
+        : 0x0284c7;
+
   // Hierarchy Roots
   const root = new THREE.Group();
   root.name = `TankRig_${tierId}`;
@@ -403,7 +414,7 @@ export function createTankRig(
   driverHatch.position.set(-0.25, hullBaseY + hullH / 2 + 0.04, hullLen * 0.32);
   hullGroup.add(driverHatch);
 
-  const triplexGlass = makeBox(0.24, 0.04, 0.06, new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
+  const triplexGlass = makeBox(0.24, 0.04, 0.06, new THREE.MeshBasicMaterial({ color: energyBaseColor }));
   triplexGlass.position.set(-0.25, hullBaseY + hullH / 2 + 0.08, hullLen * 0.33);
   hullGroup.add(triplexGlass);
 
@@ -453,8 +464,8 @@ export function createTankRig(
   if (tierId === 'tier5') {
     // Glowing Tesla Conduit Rails along the full chassis length!
     const teslaRailMat = new THREE.MeshStandardMaterial({
-      color: 0x38bdf8,
-      emissive: isEnemy ? 0xef4444 : isAlly ? 0x06b6d4 : 0x0284c7,
+      color: energyBaseColor,
+      emissive: energyEmissiveColor,
       emissiveIntensity: 1.6,
       roughness: 0.2,
       metalness: 0.1
@@ -698,8 +709,8 @@ export function createTankRig(
 
     // Twin Electromagnetic Induction Coils on the turret flanks
     const coilMat = new THREE.MeshStandardMaterial({
-      color: 0x38bdf8,
-      emissive: isEnemy ? 0xef4444 : isAlly ? 0x06b6d4 : 0x0284c7,
+      color: energyBaseColor,
+      emissive: energyEmissiveColor,
       emissiveIntensity: 1.8,
       roughness: 0.1,
       metalness: 0.8
