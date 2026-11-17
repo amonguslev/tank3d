@@ -1,6 +1,6 @@
 # STATE.md — Поточний стан проєкту «Танчики 3D: World of Tanks Edition»
 
-> **Останнє оновлення:** 2026-11-15  
+> **Останнє оновлення:** 2026-11-17  
 > **Статус:** ✅ **Готово — v3.0 World of Tanks Edition PWA зібрано та перевірено (TypeScript 0 помилок)**  
 > **GitHub Репозиторій:** [https://github.com/amonguslev/tank3d](https://github.com/amonguslev/tank3d) (`origin`)  
 > **Продакшн URL (GitHub Pages):** [https://amonguslev.github.io/tank3d/](https://amonguslev.github.io/tank3d/)
@@ -47,7 +47,7 @@ C:\Users\among\Projects\tank\
 ├── .github/
 │   └── workflows/
 │       └── deploy.yml        # CI/CD автоматичного деплою PWA на GitHub Pages
-├── AGENTS.md                 # Правила оркестрації (Carbon оркестратор/рев'ювер + flash/flash_lite суб-агенти + STATE.md)
+├── AGENTS.md                 # Правила оркестрації (оркестратор + flash/flash_lite/pro Carbon суб-агенти + STATE.md)
 ├── STATE.md                  # Єдине джерело правди про поточний стан проєкту
 ├── .gitignore                # Службові та згенеровані директорії (node_modules, dist тощо)
 ├── index.html                # Головна HTML-розмітка (3D Canvas, ангар, WoT HUD, снайперський приціл, модалки)
@@ -91,6 +91,8 @@ C:\Users\among\Projects\tank\
 ---
 
 ## 5. Історія змін (Changelog)
+- **2026-11-17 (Оновлення правил агентів):**
+  - Додано в `AGENTS.md` правило використовувати потужнішу модель Carbon (`Model: "pro"`) для суб-агентів за потреби (для складних архітектурних або 3D-задач).
 - **2026-11-15 (Реліз v3.0 World of Tanks Edition):**
   - Оновлено конфігурацію PWA маніфесту у `vite.config.ts` (`name`, `short_name`, `description`).
   - Очищено `index.html` від застарілих елементів (видалено прихований legacy-блок).
