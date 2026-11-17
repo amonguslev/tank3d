@@ -15,7 +15,7 @@ export const MAX_UPGRADE_LEVEL = 5;
 
 export const TANK_TIER_ORDER: TankTierId[] = ['tier1', 'tier2', 'tier3', 'tier4', 'tier5'];
 
-export const CAMO_ORDER: TankCamoId[] = ['default', 'forest', 'desert', 'arctic', 'vip_gold', 'neon_cyber'];
+export const CAMO_ORDER: TankCamoId[] = ['default', 'forest', 'desert', 'arctic', 'crimson', 'vip_gold', 'neon_cyber'];
 
 export const CAMO_SPECS: Record<TankCamoId, TankCamoSpec> = {
   default: {
@@ -58,6 +58,20 @@ export const CAMO_SPECS: Record<TankCamoId, TankCamoSpec> = {
     headlightEmissive: 0x38bdf8,
     roughness: 0.55,
     metalness: 0.35
+  },
+  crimson: {
+    id: 'crimson',
+    name: 'Червоний',
+    cost: 300,
+    previewBg: 'linear-gradient(135deg, #991b1b, #ef4444)',
+    hullColor: 0xb91c1c,
+    turretColor: 0x991b1b,
+    trimColor: 0xf87171,
+    armorDarkColor: 0x450a0a,
+    headlightColor: 0xfecaca,
+    headlightEmissive: 0xef4444,
+    metalness: 0.45,
+    roughness: 0.4
   },
   vip_gold: {
     id: 'vip_gold',

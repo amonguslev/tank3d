@@ -6,7 +6,7 @@ export type MapBiomeId = 'hills' | 'desert' | 'arctic';
 
 export type TankTierId = 'tier1' | 'tier2' | 'tier3' | 'tier4' | 'tier5';
 
-export type TankCamoId = 'default' | 'forest' | 'desert' | 'arctic' | 'vip_gold' | 'neon_cyber';
+export type TankCamoId = 'default' | 'forest' | 'desert' | 'arctic' | 'crimson' | 'vip_gold' | 'neon_cyber';
 
 export interface TankCamoSpec {
   id: TankCamoId;
