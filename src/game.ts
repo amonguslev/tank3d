@@ -3,7 +3,8 @@ import type { SoundEngine } from './audio';
 import {
   computeTankStats,
   MAP_DEFINITIONS,
-  TANK_SPECS
+  TANK_SPECS,
+  TANK_TIER_ORDER
 } from './classes';
 import type { InputManager, WotInputSnapshot } from './input';
 import {
@@ -16,11 +17,13 @@ import {
   WORLD_HALF_SIZE
 } from './levels';
 import {
+  createCaptureBaseMesh,
   createExplosiveBarrelMesh,
   createHangarEnvironment,
   createPickupMesh,
   createProjectileMesh,
   createTankRig,
+  type CaptureBaseVisual,
   type TankVisualRig
 } from './meshes';
 import { ParticleSystem } from './particles';
@@ -36,6 +39,9 @@ import type {
   PowerUpKind,
   ProjectileStyle,
   TankTierId,
+  TeamBattleHudState,
+  TeamRosterEntry,
+  TeamSide,
   WeaponSlot
 } from './types';
 
@@ -53,6 +59,7 @@ export interface EnemyPlateScreenItem {
   screenX: number;
   screenY: number;
   hpPercent?: number;
+  isAlly?: boolean;
 }
 
 export interface TurretAimScreenOffset {
@@ -78,6 +85,7 @@ export interface TankGameCallbacks {
 
 interface ActiveEnemy {
   id: number;
+  team: TeamSide;
   spec: EnemyWaveUnitSpec;
   rig: TankVisualRig;
   x: number;
@@ -99,6 +107,7 @@ interface ActiveProjectile {
   mesh: THREE.Object3D;
   pos: THREE.Vector3;
   vel: THREE.Vector3;
+  team: TeamSide;
   fromPlayer: boolean;
   ownerEnemyId?: number;
   damage: number;
@@ -214,6 +223,15 @@ export class TankGame3D {
 
   // Duel Mode
   private duelOpponent: ActiveEnemy | null = null;
+
+  // Team Battle 5v5 + Capture Base Mode
+  private captureBaseVisual: CaptureBaseVisual | null = null;
+  private captureProgress = 0;
+  private captureTeam: TeamSide | 'contested' | null = null;
+  private captureOwnerProgressTeam: TeamSide | null = null;
+  private baseAlarmTimer = 0;
+  private teamAlliesRoster: Array<{ id: number; tier: number; isPlayer?: boolean }> = [];
+  private teamEnemiesRoster: Array<{ id: number; tier: number }> = [];
 
   // Entities
   private projectiles: ActiveProjectile[] = [];
@@ -388,6 +406,8 @@ export class TankGame3D {
     // Spawn Mode-Specific Units
     if (this.currentMode === 'duel') {
       this.initDuelMode();
+    } else if (this.currentMode === 'team_battle') {
+      this.initTeamBattleMode();
     } else {
       this.initWaveMode(1);
     }
@@ -629,6 +649,7 @@ export class TankGame3D {
 
     const enemy: ActiveEnemy = {
       id: this.enemyIdCounter++,
+      team: 'enemies',
       spec,
       rig,
       x: sx,
@@ -670,6 +691,7 @@ export class TankGame3D {
 
     const opponent: ActiveEnemy = {
       id: this.enemyIdCounter++,
+      team: 'enemies',
       spec: opponentSpec,
       rig,
       x: spawn.x,
@@ -693,6 +715,144 @@ export class TankGame3D {
     this.callbacks.onWaveBanner?.(
       'БИТВА 1 НА 1',
       `Суперник: ${opponentSpec.name}`
+    );
+  }
+
+  private initTeamBattleMode(): void {
+    if (!this.arena || !this.playerRig) return;
+
+    // 1. Ensure player spawns at center of southern line (0, 52), facing north (yaw = Math.PI)
+    this.playerX = 0;
+    this.playerZ = 52;
+    this.playerHullYaw = Math.PI;
+    this.playerTurretYaw = Math.PI;
+    this.playerGroundY = this.arena.getHeightAt(this.playerX, this.playerZ);
+    this.playerRig.root.position.set(this.playerX, this.playerGroundY, this.playerZ);
+    this.playerRig.root.rotation.y = this.playerHullYaw;
+    this.input.resetCameraAngles(Math.PI, -0.05);
+
+    // 2. Setup central capture base at (0, 0), radius 11m
+    this.captureProgress = 0;
+    this.captureTeam = null;
+    this.captureOwnerProgressTeam = null;
+    this.baseAlarmTimer = 0;
+    this.captureBaseVisual = createCaptureBaseMesh(11);
+    const baseY = this.arena.getHeightAt(0, 0);
+    this.captureBaseVisual.group.position.set(0, baseY, 0);
+    this.battleScene.add(this.captureBaseVisual.group);
+
+    // 3. Helper to pick balanced bot tier around player's tier
+    const playerTierNum = TANK_SPECS[this.playerTierId].tierNumber;
+    const minTier = Math.max(1, playerTierNum - 1);
+    const maxTier = Math.min(5, playerTierNum + 1);
+
+    const pickBotTierId = (): TankTierId => {
+      const t = minTier + Math.floor(Math.random() * (maxTier - minTier + 1));
+      return TANK_TIER_ORDER[t - 1];
+    };
+
+    const makeBotSpec = (tierId: TankTierId, isAlly: boolean): EnemyWaveUnitSpec => {
+      const tankSpec = TANK_SPECS[tierId];
+      return {
+        tierId,
+        isBoss: false,
+        name: isAlly ? `${tankSpec.name}` : `${tankSpec.name}`,
+        hp: tankSpec.baseHp,
+        damage: tankSpec.primaryWeapon.damage,
+        reloadSec: tankSpec.primaryWeapon.reloadSec,
+        speed: tankSpec.baseSpeed,
+        scale: 1.0,
+        rewardCoins: 45 + tankSpec.tierNumber * 20,
+        scorePoints: 250 + tankSpec.tierNumber * 120
+      };
+    };
+
+    this.teamAlliesRoster = [{ id: 0, tier: playerTierNum, isPlayer: true }];
+    this.teamEnemiesRoster = [];
+
+    // 4. Spawn 4 allied bots on southern line
+    const allyXs = [-24, -12, 12, 24];
+    for (const ax of allyXs) {
+      const tierId = pickBotTierId();
+      const spec = makeBotSpec(tierId, true);
+      const az = 52 + Math.random() * 3;
+      const groundY = this.arena.getHeightAt(ax, az);
+
+      const rig = createTankRig(tierId, { isAlly: true });
+      rig.root.position.set(ax, groundY, az);
+      rig.root.rotation.y = Math.PI;
+      this.battleScene.add(rig.root);
+
+      const allyBot: ActiveEnemy = {
+        id: this.enemyIdCounter++,
+        team: 'allies',
+        spec,
+        rig,
+        x: ax,
+        z: az,
+        groundY,
+        hullYaw: Math.PI,
+        turretYaw: Math.PI,
+        gunPitch: 0,
+        hp: spec.hp,
+        maxHp: spec.hp,
+        reloadLeft: 0.6 + Math.random() * 0.6,
+        frontRecoil: 0,
+        aiTimer: Math.random() * 1.2,
+        targetPos: new THREE.Vector3(0, 0, 0),
+        stuckTimer: 0
+      };
+
+      this.activeEnemies.push(allyBot);
+      this.teamAlliesRoster.push({
+        id: allyBot.id,
+        tier: TANK_SPECS[tierId].tierNumber
+      });
+    }
+
+    // 5. Spawn 5 enemy bots on northern line
+    const enemyXs = [-24, -12, 0, 12, 24];
+    for (const ex of enemyXs) {
+      const tierId = pickBotTierId();
+      const spec = makeBotSpec(tierId, false);
+      const ez = -52 - Math.random() * 3;
+      const groundY = this.arena.getHeightAt(ex, ez);
+
+      const rig = createTankRig(tierId, { isEnemy: true });
+      rig.root.position.set(ex, groundY, ez);
+      rig.root.rotation.y = 0;
+      this.battleScene.add(rig.root);
+
+      const enemyBot: ActiveEnemy = {
+        id: this.enemyIdCounter++,
+        team: 'enemies',
+        spec,
+        rig,
+        x: ex,
+        z: ez,
+        groundY,
+        hullYaw: 0,
+        turretYaw: 0,
+        gunPitch: 0,
+        hp: spec.hp,
+        maxHp: spec.hp,
+        reloadLeft: 0.6 + Math.random() * 0.6,
+        frontRecoil: 0,
+        aiTimer: Math.random() * 1.2,
+        targetPos: new THREE.Vector3(0, 0, 0),
+        stuckTimer: 0
+      };
+
+      this.activeEnemies.push(enemyBot);
+      this.teamEnemiesRoster.push({
+        id: enemyBot.id,
+        tier: TANK_SPECS[tierId].tierNumber
+      });
+    }
+
+    this.callbacks.onWaveBanner?.(
+      'КОМАНДНИЙ БІЙ 5 НА 5',
+      'Знищте ворогів або захопіть центральну базу!'
     );
   }
 
@@ -841,9 +1001,11 @@ export class TankGame3D {
       enemy.rig.updateVisuals(timeSec, enemy.frontRecoil, 0);
     }
 
-    // 15. Check Wave Progress
+    // 15. Check Wave Progress & Team Battle Base Capture
     if (this.currentMode === 'waves') {
       this.checkWaveProgress();
+    } else if (this.currentMode === 'team_battle') {
+      this.updateTeamBattleBase(dt);
     }
 
     // 16. Compile HUD & Enemy Plates Callbacks
@@ -1029,7 +1191,7 @@ export class TankGame3D {
 
     // 1. Check against enemies
     for (const enemy of this.activeEnemies) {
-      if (enemy.hp <= 0) continue;
+      if (enemy.hp <= 0 || enemy.team !== 'enemies') continue;
       const enemyCenter = new THREE.Vector3(enemy.x, enemy.groundY + 1.2, enemy.z);
       const toCenter = enemyCenter.clone().sub(rayOrigin);
       const proj = toCenter.dot(rayDir);
@@ -1183,6 +1345,7 @@ export class TankGame3D {
       mesh,
       pos: muzzlePos.clone(),
       vel,
+      team: 'allies',
       fromPlayer: true,
       damage,
       style: weapon.projectileStyle,
@@ -1199,6 +1362,25 @@ export class TankGame3D {
   // Enemy AI & Movement
   // ==========================================================================
 
+  private findBotTarget(bot: ActiveEnemy): { x: number; z: number; groundY: number; dist: number } | null {
+    let best: { x: number; z: number; groundY: number; dist: number } | null = null;
+
+    if (bot.team === 'enemies' && this.playerHp > 0) {
+      const dist = Math.hypot(this.playerX - bot.x, this.playerZ - bot.z);
+      best = { x: this.playerX, z: this.playerZ, groundY: this.playerGroundY, dist };
+    }
+
+    for (const other of this.activeEnemies) {
+      if (other.hp <= 0 || other.team === bot.team) continue;
+      const dist = Math.hypot(other.x - bot.x, other.z - bot.z);
+      if (!best || dist < best.dist) {
+        best = { x: other.x, z: other.z, groundY: other.groundY, dist };
+      }
+    }
+
+    return best;
+  }
+
   private updateEnemies(dt: number, timeSec: number): void {
     if (!this.arena) return;
 
@@ -1210,35 +1392,45 @@ export class TankGame3D {
         enemy.reloadLeft -= dt;
       }
 
+      const target = this.findBotTarget(enemy);
+
       // AI Decision timer (every 1.2-2.0s)
       enemy.aiTimer -= dt;
       if (enemy.aiTimer <= 0) {
         enemy.aiTimer = 1.2 + Math.random() * 0.8;
 
-        // Choose navigation waypoint: close in towards player or keep distance for sniper
-        const distToPlayer = Math.hypot(this.playerX - enemy.x, this.playerZ - enemy.z);
-        if (distToPlayer > 32) {
+        if (this.currentMode === 'team_battle' && (!target || target.dist > 48)) {
+          // Gravitate toward central capture base (0, 0) when no enemy is nearby
           enemy.targetPos.set(
-            this.playerX + (Math.random() - 0.5) * 14,
+            (Math.random() - 0.5) * 12,
             0,
-            this.playerZ + (Math.random() - 0.5) * 14
+            (Math.random() - 0.5) * 12
           );
-        } else if (distToPlayer < 14) {
-          // Back up slightly or flank
-          const awayDir = new THREE.Vector2(enemy.x - this.playerX, enemy.z - this.playerZ).normalize();
-          enemy.targetPos.set(
-            enemy.x + awayDir.x * 12 + (Math.random() - 0.5) * 8,
-            0,
-            enemy.z + awayDir.y * 12 + (Math.random() - 0.5) * 8
-          );
-        } else {
-          // Circle around player
-          const angle = Math.atan2(enemy.x - this.playerX, enemy.z - this.playerZ) + 0.45;
-          enemy.targetPos.set(
-            this.playerX + Math.sin(angle) * 22,
-            0,
-            this.playerZ + Math.cos(angle) * 22
-          );
+        } else if (target) {
+          const distToTarget = target.dist;
+          if (distToTarget > 32) {
+            enemy.targetPos.set(
+              target.x + (Math.random() - 0.5) * 14,
+              0,
+              target.z + (Math.random() - 0.5) * 14
+            );
+          } else if (distToTarget < 14) {
+            // Back up slightly or flank
+            const awayDir = new THREE.Vector2(enemy.x - target.x, enemy.z - target.z).normalize();
+            enemy.targetPos.set(
+              enemy.x + awayDir.x * 12 + (Math.random() - 0.5) * 8,
+              0,
+              enemy.z + awayDir.y * 12 + (Math.random() - 0.5) * 8
+            );
+          } else {
+            // Circle around target
+            const angle = Math.atan2(enemy.x - target.x, enemy.z - target.z) + 0.45;
+            enemy.targetPos.set(
+              target.x + Math.sin(angle) * 22,
+              0,
+              target.z + Math.cos(angle) * 22
+            );
+          }
         }
       }
 
@@ -1261,13 +1453,15 @@ export class TankGame3D {
         const spd = enemy.spec.speed * 0.9;
         const nx = enemy.x + fwdX * spd * dt;
         const nz = enemy.z + fwdZ * spd * dt;
+        const tankRadius = enemy.rig.halfWidth + 0.4;
 
-        if (!this.checkObstacleCollision(nx, nz, enemy.rig.halfWidth + 0.4)) {
+        if (!this.checkObstacleCollision(nx, nz, tankRadius) && !this.checkTankCollision(nx, nz, tankRadius, enemy.id)) {
           enemy.x = THREE.MathUtils.clamp(nx, -86, 86);
           enemy.z = THREE.MathUtils.clamp(nz, -86, 86);
         } else {
           // Change target quickly if blocked
           enemy.aiTimer = 0.1;
+          enemy.hullYaw += (enemy.id % 2 === 0 ? 1 : -1) * 1.4 * dt;
         }
       }
 
@@ -1280,33 +1474,39 @@ export class TankGame3D {
       const qSlp = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), norm);
       enemy.rig.root.quaternion.copy(qSlp.multiply(qY));
 
-      // Aim Turret & Gun at Player in Enemy Hull Local Coordinates
-      const playerTarget = new THREE.Vector3(this.playerX, this.playerGroundY + 1.05, this.playerZ);
-      const localTarget = enemy.rig.hullGroup.worldToLocal(playerTarget);
-      const localPivot = enemy.rig.frontTurretPivot.position;
+      // Aim Turret & Gun at Target in Bot Hull Local Coordinates
+      if (target) {
+        const aimTarget = new THREE.Vector3(target.x, target.groundY + 1.05, target.z);
+        const localTarget = enemy.rig.hullGroup.worldToLocal(aimTarget);
+        const localPivot = enemy.rig.frontTurretPivot.position;
 
-      const desiredLocalYaw = Math.atan2(localTarget.x - localPivot.x, localTarget.z - localPivot.z);
-      let tDiff = desiredLocalYaw - enemy.rig.frontTurretPivot.rotation.y;
-      while (tDiff < -Math.PI) tDiff += Math.PI * 2;
-      while (tDiff > Math.PI) tDiff -= Math.PI * 2;
+        const desiredLocalYaw = Math.atan2(localTarget.x - localPivot.x, localTarget.z - localPivot.z);
+        let tDiff = desiredLocalYaw - enemy.rig.frontTurretPivot.rotation.y;
+        while (tDiff < -Math.PI) tDiff += Math.PI * 2;
+        while (tDiff > Math.PI) tDiff -= Math.PI * 2;
 
-      enemy.rig.frontTurretPivot.rotation.y += Math.sign(tDiff) * Math.min(Math.abs(tDiff), 2.6 * dt);
-      enemy.turretYaw = enemy.hullYaw + enemy.rig.frontTurretPivot.rotation.y;
+        enemy.rig.frontTurretPivot.rotation.y += Math.sign(tDiff) * Math.min(Math.abs(tDiff), 2.6 * dt);
+        enemy.turretYaw = enemy.hullYaw + enemy.rig.frontTurretPivot.rotation.y;
 
-      const distXZ = Math.hypot(localTarget.x - localPivot.x, localTarget.z - localPivot.z);
-      const dy = localTarget.y - (localPivot.y + enemy.rig.frontGunPivot.position.y);
-      const desiredPitch = -Math.atan2(dy, Math.max(0.5, distXZ));
-      const clampedPitch = THREE.MathUtils.clamp(desiredPitch, -0.42, 0.22);
-      const pDiff = clampedPitch - enemy.rig.frontGunPivot.rotation.x;
-      enemy.rig.frontGunPivot.rotation.x += Math.sign(pDiff) * Math.min(Math.abs(pDiff), 2.6 * dt);
-      enemy.gunPitch = enemy.rig.frontGunPivot.rotation.x;
+        const distXZ = Math.hypot(localTarget.x - localPivot.x, localTarget.z - localPivot.z);
+        const dy = localTarget.y - (localPivot.y + enemy.rig.frontGunPivot.position.y);
+        const desiredPitch = -Math.atan2(dy, Math.max(0.5, distXZ));
+        const clampedPitch = THREE.MathUtils.clamp(desiredPitch, -0.42, 0.22);
+        const pDiff = clampedPitch - enemy.rig.frontGunPivot.rotation.x;
+        enemy.rig.frontGunPivot.rotation.x += Math.sign(pDiff) * Math.min(Math.abs(pDiff), 2.6 * dt);
+        enemy.gunPitch = enemy.rig.frontGunPivot.rotation.x;
 
-      // Enemy Firing check
-      const distToPlayer = Math.hypot(this.playerX - enemy.x, this.playerZ - enemy.z);
-      const isAimed = Math.abs(tDiff) < 0.24 && Math.abs(pDiff) < 0.24;
+        // Bot Firing check
+        const isAimed = Math.abs(tDiff) < 0.24 && Math.abs(pDiff) < 0.24;
 
-      if (isAimed && distToPlayer < 75 && enemy.reloadLeft <= 0) {
-        this.handleEnemyFiring(enemy);
+        if (isAimed && target.dist < 75 && enemy.reloadLeft <= 0) {
+          this.handleEnemyFiring(enemy);
+        }
+      } else {
+        // Center turret forward if no target
+        const tDiff = -enemy.rig.frontTurretPivot.rotation.y;
+        enemy.rig.frontTurretPivot.rotation.y += Math.sign(tDiff) * Math.min(Math.abs(tDiff), 2.0 * dt);
+        enemy.turretYaw = enemy.hullYaw + enemy.rig.frontTurretPivot.rotation.y;
       }
     }
   }
@@ -1334,7 +1534,7 @@ export class TankGame3D {
     this.battleParticles.spawnMuzzleFlash(muzzlePos, barrelDir, style);
     this.audio.playShoot(style);
 
-    const mesh = createProjectileMesh(style, true);
+    const mesh = createProjectileMesh(style, enemy.team === 'enemies');
     mesh.position.copy(muzzlePos);
     mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), barrelDir);
     this.battleScene.add(mesh);
@@ -1345,6 +1545,7 @@ export class TankGame3D {
       mesh,
       pos: muzzlePos.clone(),
       vel,
+      team: enemy.team,
       fromPlayer: false,
       ownerEnemyId: enemy.id,
       damage: enemy.spec.damage,
@@ -1429,8 +1630,8 @@ export class TankGame3D {
       }
       if (collided) continue;
 
-      // 4. Hit Player (if projectile from enemy)
-      if (!p.fromPlayer) {
+      // 4. Hit Player (if projectile from enemy team)
+      if (p.team === 'enemies') {
         const playerCenter = new THREE.Vector3(this.playerX, this.playerGroundY + 1.1, this.playerZ);
         const dist = p.pos.distanceTo(playerCenter);
         if (dist <= (this.playerRig?.halfWidth ?? 1.2) + 0.4) {
@@ -1441,22 +1642,20 @@ export class TankGame3D {
         }
       }
 
-      // 5. Hit Enemies (if projectile from player)
-      if (p.fromPlayer) {
-        for (const enemy of this.activeEnemies) {
-          if (enemy.hp <= 0) continue;
-          const enemyCenter = new THREE.Vector3(enemy.x, enemy.groundY + 1.1, enemy.z);
-          const dist = p.pos.distanceTo(enemyCenter);
-          if (dist <= enemy.rig.halfWidth + 0.4) {
-            this.resolveProjectileImpact(p, p.pos, enemy);
-            this.battleScene.remove(p.mesh);
-            this.projectiles.splice(i, 1);
-            collided = true;
-            break;
-          }
+      // 5. Hit opposing bots (allies hit enemies; enemies hit allies)
+      for (const enemy of this.activeEnemies) {
+        if (enemy.hp <= 0 || enemy.team === p.team) continue;
+        const enemyCenter = new THREE.Vector3(enemy.x, enemy.groundY + 1.1, enemy.z);
+        const dist = p.pos.distanceTo(enemyCenter);
+        if (dist <= enemy.rig.halfWidth + 0.4) {
+          this.resolveProjectileImpact(p, p.pos, enemy);
+          this.battleScene.remove(p.mesh);
+          this.projectiles.splice(i, 1);
+          collided = true;
+          break;
         }
-        if (collided) continue;
       }
+      if (collided) continue;
     }
   }
 
@@ -1465,26 +1664,26 @@ export class TankGame3D {
     this.audio.playHit();
 
     // 1. Direct Hit Damage
-    if (directTarget && directTarget.hp > 0) {
-      this.applyDamageToEnemy(directTarget, p.damage, hitPos);
+    if (directTarget && directTarget.hp > 0 && directTarget.team !== p.team) {
+      this.applyDamageToEnemy(directTarget, p.damage, hitPos, false, p.fromPlayer);
     }
 
     // 2. Area of Effect (AoE) Damage
     if (p.aoeRadius > 0) {
       for (const enemy of this.activeEnemies) {
-        if (enemy === directTarget || enemy.hp <= 0) continue;
+        if (enemy === directTarget || enemy.hp <= 0 || enemy.team === p.team) continue;
         const d = Math.hypot(enemy.x - hitPos.x, enemy.z - hitPos.z);
         if (d <= p.aoeRadius) {
           const falloff = 1 - d / p.aoeRadius;
           const aoeDmg = Math.round(p.damage * Math.max(0.35, falloff));
-          this.applyDamageToEnemy(enemy, aoeDmg, new THREE.Vector3(enemy.x, enemy.groundY + 1.0, enemy.z));
+          this.applyDamageToEnemy(enemy, aoeDmg, new THREE.Vector3(enemy.x, enemy.groundY + 1.0, enemy.z), false, p.fromPlayer);
         }
       }
     }
 
     // 3. Tesla Electric Chain Lightning Feature
     if (p.style === 'electric' && p.chainCount > 0 && p.chainRange > 0) {
-      this.resolveElectricChain(hitPos, directTarget, p.damage, p.chainCount, p.chainRange);
+      this.resolveElectricChain(hitPos, directTarget, p.damage, p.chainCount, p.chainRange, p.team, p.fromPlayer);
     }
   }
 
@@ -1493,14 +1692,16 @@ export class TankGame3D {
     excludeEnemy: ActiveEnemy | null,
     baseDmg: number,
     chainCount: number,
-    chainRange: number
+    chainRange: number,
+    attackerTeam: TeamSide = 'allies',
+    fromPlayer = true
   ): void {
     let hitsRemaining = chainCount;
     let prevPos = originPos.clone();
 
-    // Find closest enemies within chainRange
+    // Find closest opposing bots within chainRange
     const candidates = this.activeEnemies
-      .filter((e) => e !== excludeEnemy && e.hp > 0)
+      .filter((e) => e !== excludeEnemy && e.hp > 0 && e.team !== attackerTeam)
       .map((e) => ({
         enemy: e,
         dist: originPos.distanceTo(new THREE.Vector3(e.x, e.groundY + 1.0, e.z))
@@ -1516,19 +1717,27 @@ export class TankGame3D {
       this.audio.playElectricArc();
 
       const chainDmg = Math.round(baseDmg * 0.55);
-      this.applyDamageToEnemy(cand.enemy, chainDmg, targetPos, true);
+      this.applyDamageToEnemy(cand.enemy, chainDmg, targetPos, true, fromPlayer);
 
       prevPos = targetPos;
       hitsRemaining--;
     }
   }
 
-  private applyDamageToEnemy(enemy: ActiveEnemy, amount: number, hitPos: THREE.Vector3, isElectric = false): void {
+  private applyDamageToEnemy(
+    enemy: ActiveEnemy,
+    amount: number,
+    hitPos: THREE.Vector3,
+    isElectric = false,
+    fromPlayer = true
+  ): void {
     if (enemy.hp <= 0) return;
 
     enemy.hp = Math.max(0, enemy.hp - amount);
-    this.totalDamageDealt += amount;
-    this.score += amount * 2;
+    if (fromPlayer && enemy.team === 'enemies') {
+      this.totalDamageDealt += amount;
+      this.score += amount * 2;
+    }
 
     // Floating text
     const proj = hitPos.clone().project(this.camera);
@@ -1536,7 +1745,13 @@ export class TankGame3D {
     const screenY = ((-proj.y + 1) / 2) * window.innerHeight;
 
     const textLabel = isElectric ? `⚡ -${amount}` : `-${amount}`;
-    const textColor = isElectric ? '#38bdf8' : amount > 150 ? '#f59e0b' : '#facc15';
+    const textColor = enemy.team === 'allies'
+      ? '#f87171'
+      : isElectric
+        ? '#38bdf8'
+        : amount > 150
+          ? '#f59e0b'
+          : '#facc15';
 
     this.callbacks.onFloatingText?.({
       x: Math.round(screenX),
@@ -1546,42 +1761,44 @@ export class TankGame3D {
       big: amount > 140
     });
 
-    // Check Enemy Destroyed
+    // Check Bot Destroyed
     if (enemy.hp === 0) {
       this.handleEnemyDestroyed(enemy, hitPos);
     }
   }
 
   private handleEnemyDestroyed(enemy: ActiveEnemy, deathPos: THREE.Vector3): void {
-    this.killsInRun++;
-
-    const rewardCoins = enemy.spec.rewardCoins;
-    this.coinsEarned += rewardCoins;
-    this.score += enemy.spec.scorePoints;
-
     // Heavy explosion VFX & sound
     this.battleParticles.spawnExplosion(deathPos, enemy.spec.isBoss ? 1.9 : 1.25);
     this.audio.playExplosion(enemy.spec.isBoss);
 
-    // Floating rewards text
-    const proj = deathPos.clone().project(this.camera);
-    const screenX = ((proj.x + 1) / 2) * window.innerWidth;
-    const screenY = ((-proj.y + 1) / 2) * window.innerHeight;
+    if (enemy.team === 'enemies') {
+      this.killsInRun++;
 
-    this.callbacks.onFloatingText?.({
-      x: Math.round(screenX),
-      y: Math.round(screenY - 32),
-      text: `+${rewardCoins} 🪙`,
-      color: '#fbbf24',
-      big: true
-    });
+      const rewardCoins = enemy.spec.rewardCoins;
+      this.coinsEarned += rewardCoins;
+      this.score += enemy.spec.scorePoints;
 
-    // Chance to drop power-up pickup (40% for regular, 100% for boss)
-    const dropChance = enemy.spec.isBoss ? 1.0 : 0.38;
-    if (Math.random() < dropChance) {
-      const kinds: PowerUpKind[] = ['repair', 'damage', 'speed', 'shield'];
-      const chosenKind = kinds[Math.floor(Math.random() * kinds.length)];
-      this.spawnPickup(enemy.x, enemy.z, chosenKind);
+      // Floating rewards text
+      const proj = deathPos.clone().project(this.camera);
+      const screenX = ((proj.x + 1) / 2) * window.innerWidth;
+      const screenY = ((-proj.y + 1) / 2) * window.innerHeight;
+
+      this.callbacks.onFloatingText?.({
+        x: Math.round(screenX),
+        y: Math.round(screenY - 32),
+        text: `+${rewardCoins} 🪙`,
+        color: '#fbbf24',
+        big: true
+      });
+
+      // Chance to drop power-up pickup (40% for regular, 100% for boss)
+      const dropChance = enemy.spec.isBoss ? 1.0 : 0.38;
+      if (Math.random() < dropChance) {
+        const kinds: PowerUpKind[] = ['repair', 'damage', 'speed', 'shield'];
+        const chosenKind = kinds[Math.floor(Math.random() * kinds.length)];
+        this.spawnPickup(enemy.x, enemy.z, chosenKind);
+      }
     }
 
     // Remove rig from scene and active list
@@ -1595,6 +1812,15 @@ export class TankGame3D {
     if (this.currentMode === 'duel' && this.duelOpponent === enemy) {
       this.handleDuelVictory();
       return;
+    }
+
+    // Team Battle Victory Condition (all 5 enemies destroyed)
+    if (this.currentMode === 'team_battle' && this.inBattle) {
+      const anyEnemyAlive = this.activeEnemies.some((e) => e.team === 'enemies' && e.hp > 0);
+      if (!anyEnemyAlive) {
+        this.handleTeamBattleVictory();
+        return;
+      }
     }
 
     // Refill next wave enemy
@@ -1830,6 +2056,108 @@ export class TankGame3D {
     this.callbacks.onBattleEnd?.(summary);
   }
 
+  private updateTeamBattleBase(dt: number): void {
+    if (!this.inBattle || this.currentMode !== 'team_battle') return;
+
+    const baseRadius = 11;
+    let alliesInZone = 0;
+    let enemiesInZone = 0;
+
+    if (this.playerHp > 0 && Math.hypot(this.playerX, this.playerZ) <= baseRadius) {
+      alliesInZone++;
+    }
+
+    for (const bot of this.activeEnemies) {
+      if (bot.hp <= 0) continue;
+      if (Math.hypot(bot.x, bot.z) <= baseRadius) {
+        if (bot.team === 'allies') {
+          alliesInZone++;
+        } else {
+          enemiesInZone++;
+        }
+      }
+    }
+
+    let isGrowing = false;
+
+    if (alliesInZone > 0 && enemiesInZone > 0) {
+      this.captureTeam = 'contested';
+    } else if (alliesInZone > 0) {
+      if (this.captureOwnerProgressTeam === 'enemies' && this.captureProgress > 0) {
+        this.captureProgress = 0;
+      }
+      this.captureOwnerProgressTeam = 'allies';
+      this.captureTeam = 'allies';
+      const rate = alliesInZone >= 2 ? 20 : 12;
+      this.captureProgress = Math.min(100, this.captureProgress + rate * dt);
+      isGrowing = this.captureProgress < 100;
+    } else if (enemiesInZone > 0) {
+      if (this.captureOwnerProgressTeam === 'allies' && this.captureProgress > 0) {
+        this.captureProgress = 0;
+      }
+      this.captureOwnerProgressTeam = 'enemies';
+      this.captureTeam = 'enemies';
+      const rate = enemiesInZone >= 2 ? 20 : 12;
+      this.captureProgress = Math.min(100, this.captureProgress + rate * dt);
+      isGrowing = this.captureProgress < 100;
+    } else if (this.captureProgress > 0) {
+      this.captureProgress = Math.max(0, this.captureProgress - 8 * dt);
+      if (this.captureProgress === 0) {
+        this.captureTeam = null;
+        this.captureOwnerProgressTeam = null;
+      } else {
+        this.captureTeam = this.captureOwnerProgressTeam;
+      }
+    } else {
+      this.captureTeam = null;
+      this.captureOwnerProgressTeam = null;
+    }
+
+    this.captureBaseVisual?.update(dt, this.captureTeam, this.captureProgress);
+
+    if ((this.captureTeam === 'allies' || this.captureTeam === 'enemies') && isGrowing) {
+      this.baseAlarmTimer -= dt;
+      if (this.baseAlarmTimer <= 0) {
+        this.baseAlarmTimer = 1.8;
+        this.audio.playBaseAlarm(this.captureTeam === 'enemies');
+      }
+    } else {
+      this.baseAlarmTimer = Math.max(0, this.baseAlarmTimer - dt);
+    }
+
+    // Check base capture win/loss
+    if (this.captureProgress >= 100) {
+      if (this.captureTeam === 'allies') {
+        this.handleTeamBattleVictory();
+      } else if (this.captureTeam === 'enemies') {
+        this.handlePlayerDefeat();
+      }
+    }
+  }
+
+  private handleTeamBattleVictory(): void {
+    if (!this.inBattle) return;
+    this.inBattle = false;
+    this.input.setGameplayActive(false);
+
+    const bonus = 220 + this.storage.getData().teamBattleWins * 40;
+    this.coinsEarned += bonus;
+    this.score += 1500;
+
+    const summary: BattleSummary = {
+      victory: true,
+      mode: 'team_battle',
+      waveReached: 1,
+      kills: this.killsInRun,
+      damageDealt: this.totalDamageDealt,
+      coinsEarned: this.coinsEarned,
+      score: this.score,
+      isNewBestWave: false
+    };
+
+    this.callbacks.onBattleEnd?.(summary);
+  }
+
   private handlePlayerDefeat(): void {
     this.inBattle = false;
     this.input.setGameplayActive(false);
@@ -1863,10 +2191,20 @@ export class TankGame3D {
 
     const enemiesLeft = this.currentMode === 'waves'
       ? this.waveQueue.length + this.activeEnemies.length
-      : this.activeEnemies.length;
+      : this.activeEnemies.filter((e) => e.team === 'enemies' && e.hp > 0).length;
 
     // Minimap entities compilation
     const minimapEntities: MinimapEntity[] = [];
+
+    // Central Base (Team Battle mode)
+    if (this.currentMode === 'team_battle') {
+      minimapEntities.push({
+        kind: 'base',
+        x: 0,
+        z: 0,
+        captureState: this.captureTeam
+      });
+    }
 
     // Player
     minimapEntities.push({
@@ -1876,11 +2214,11 @@ export class TankGame3D {
       yaw: this.playerHullYaw
     });
 
-    // Enemies & Boss
+    // Allies, Enemies & Boss
     for (const enemy of this.activeEnemies) {
       if (enemy.hp <= 0) continue;
       minimapEntities.push({
-        kind: enemy.spec.isBoss ? 'boss' : 'enemy',
+        kind: enemy.team === 'allies' ? 'ally' : enemy.spec.isBoss ? 'boss' : 'enemy',
         x: enemy.x,
         z: enemy.z,
         yaw: enemy.hullYaw
@@ -1954,10 +2292,37 @@ export class TankGame3D {
       cameraYaw: snap.cameraYaw,
       hullYaw: this.playerHullYaw,
       turretYaw: this.playerTurretYaw,
-      minimapEntities
+      minimapEntities,
+      teamBattle: this.buildTeamBattleHudState()
     };
 
     this.callbacks.onHudUpdate?.(hud);
+  }
+
+  private buildTeamBattleHudState(): TeamBattleHudState | null {
+    if (this.currentMode !== 'team_battle') return null;
+
+    const alliesRoster: TeamRosterEntry[] = this.teamAlliesRoster.map((entry) => ({
+      tier: entry.tier,
+      alive: entry.isPlayer
+        ? this.playerHp > 0
+        : this.activeEnemies.some((e) => e.id === entry.id && e.hp > 0),
+      isPlayer: entry.isPlayer
+    }));
+
+    const enemiesRoster: TeamRosterEntry[] = this.teamEnemiesRoster.map((entry) => ({
+      tier: entry.tier,
+      alive: this.activeEnemies.some((e) => e.id === entry.id && e.hp > 0)
+    }));
+
+    return {
+      alliesAlive: alliesRoster.filter((r) => r.alive).length,
+      enemiesAlive: enemiesRoster.filter((r) => r.alive).length,
+      alliesRoster,
+      enemiesRoster,
+      captureProgress: Math.round(this.captureProgress),
+      captureTeam: this.captureTeam
+    };
   }
 
   private dispatchEnemyPlates(): void {
@@ -1993,6 +2358,7 @@ export class TankGame3D {
           maxHp: enemy.maxHp,
           hpPercent: enemy.maxHp > 0 ? (enemy.hp / enemy.maxHp) * 100 : 0,
           isBoss: enemy.spec.isBoss,
+          isAlly: enemy.team === 'allies',
           screenX: Math.round(screenX),
           screenY: Math.round(screenY)
         });
@@ -2015,6 +2381,24 @@ export class TankGame3D {
         return true;
       }
     }
+    return false;
+  }
+
+  private checkTankCollision(x: number, z: number, tankRadius: number, selfId: number): boolean {
+    if (this.playerHp > 0) {
+      const playerRadius = this.playerRig?.halfWidth ?? 1.2;
+      if (Math.hypot(x - this.playerX, z - this.playerZ) < playerRadius + tankRadius) {
+        return true;
+      }
+    }
+
+    for (const other of this.activeEnemies) {
+      if (other.id === selfId || other.hp <= 0) continue;
+      if (Math.hypot(x - other.x, z - other.z) < other.rig.halfWidth + tankRadius) {
+        return true;
+      }
+    }
+
     return false;
   }
 
@@ -2042,6 +2426,17 @@ export class TankGame3D {
     this.activeEnemies = [];
     this.waveQueue = [];
     this.duelOpponent = null;
+
+    if (this.captureBaseVisual) {
+      this.battleScene.remove(this.captureBaseVisual.group);
+      this.captureBaseVisual = null;
+    }
+    this.captureProgress = 0;
+    this.captureTeam = null;
+    this.captureOwnerProgressTeam = null;
+    this.baseAlarmTimer = 0;
+    this.teamAlliesRoster = [];
+    this.teamEnemiesRoster = [];
 
     if (this.playerRig) {
       this.battleScene.remove(this.playerRig.root);

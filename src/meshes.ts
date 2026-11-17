@@ -97,10 +97,11 @@ const sharedHazardTex = createHazardTexture();
 
 export function createTankRig(
   tierId: TankTierId,
-  options?: { isEnemy?: boolean; isBoss?: boolean; scaleOverride?: number }
+  options?: { isEnemy?: boolean; isBoss?: boolean; isAlly?: boolean; scaleOverride?: number }
 ): TankVisualRig {
   const isEnemy = !!options?.isEnemy;
   const isBoss = !!options?.isBoss;
+  const isAlly = !!options?.isAlly && !isEnemy;
   const scaleOverride = options?.scaleOverride ?? 1.0;
 
   const spec = TANK_SPECS[tierId];
@@ -124,6 +125,12 @@ export function createTankRig(
     accentBaseColor = 0xef4444; // Warning Red
     metalness = 0.55;
     roughness = 0.5;
+  } else if (isAlly) {
+    hullBaseColor = 0x1e3a5f; // Deep Navy / Steel Ally Hull
+    turretBaseColor = 0x2563eb; // Royal Blue Turret
+    accentBaseColor = 0x22c55e; // Vivid turquoise-green accent
+    metalness = 0.5;
+    roughness = 0.45;
   }
 
   // Materials
@@ -146,7 +153,7 @@ export function createTankRig(
   });
 
   const metalTrimMat = new THREE.MeshStandardMaterial({
-    color: isBoss ? 0xf59e0b : 0x71717a,
+    color: isBoss ? 0xf59e0b : isAlly ? 0x38bdf8 : 0x71717a,
     roughness: 0.3,
     metalness: 0.85
   });
@@ -158,8 +165,8 @@ export function createTankRig(
   });
 
   const headlightMat = new THREE.MeshStandardMaterial({
-    color: isEnemy && !isBoss ? 0xff4444 : isBoss ? 0xffaa00 : 0xfffbeb,
-    emissive: isEnemy && !isBoss ? 0xff0000 : isBoss ? 0xff8800 : 0xfef08a,
+    color: isEnemy && !isBoss ? 0xff4444 : isBoss ? 0xffaa00 : isAlly ? 0x38bdf8 : 0xfffbeb,
+    emissive: isEnemy && !isBoss ? 0xff0000 : isBoss ? 0xff8800 : isAlly ? 0x06b6d4 : 0xfef08a,
     emissiveIntensity: 1.8,
     roughness: 0.1,
     metalness: 0.1
@@ -423,7 +430,7 @@ export function createTankRig(
     // Glowing Tesla Conduit Rails along the full chassis length!
     const teslaRailMat = new THREE.MeshStandardMaterial({
       color: 0x38bdf8,
-      emissive: isEnemy ? 0xef4444 : 0x0284c7,
+      emissive: isEnemy ? 0xef4444 : isAlly ? 0x06b6d4 : 0x0284c7,
       emissiveIntensity: 1.6,
       roughness: 0.2,
       metalness: 0.1
@@ -668,7 +675,7 @@ export function createTankRig(
     // Twin Electromagnetic Induction Coils on the turret flanks
     const coilMat = new THREE.MeshStandardMaterial({
       color: 0x38bdf8,
-      emissive: isEnemy ? 0xef4444 : 0x0284c7,
+      emissive: isEnemy ? 0xef4444 : isAlly ? 0x06b6d4 : 0x0284c7,
       emissiveIntensity: 1.8,
       roughness: 0.1,
       metalness: 0.8
@@ -1331,4 +1338,149 @@ export function createPickupMesh(kind: PowerUpKind): THREE.Group {
   }
 
   return group;
+}
+
+// ============================================================================
+// Capture Base Mesh & Indicator Zone (5v5 Team Battle Mode)
+// ============================================================================
+
+export interface CaptureBaseVisual {
+  group: THREE.Group;
+  ringMat: THREE.MeshBasicMaterial;
+  flagMat: THREE.MeshStandardMaterial;
+  update: (dt: number, team: 'allies' | 'enemies' | 'contested' | null, progress: number) => void;
+}
+
+export function createCaptureBaseMesh(radius: number): CaptureBaseVisual {
+  const group = new THREE.Group();
+  group.name = 'CaptureBaseZone';
+
+  const defaultColor = 0x94a3b8;
+
+  // 1. Horizontal outer ring on the ground (slightly elevated to prevent z-fighting)
+  const ringWidth = Math.max(0.25, radius * 0.08);
+  const ringGeo = new THREE.RingGeometry(Math.max(0.1, radius - ringWidth), radius, 64);
+  ringGeo.rotateX(-Math.PI / 2);
+
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: defaultColor,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.85
+  });
+  const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+  ringMesh.position.y = 0.08;
+  group.add(ringMesh);
+
+  // 2. Inner semi-transparent capture zone
+  const innerGeo = new THREE.CircleGeometry(Math.max(0.05, radius - ringWidth), 64);
+  innerGeo.rotateX(-Math.PI / 2);
+  const innerMat = new THREE.MeshBasicMaterial({
+    color: defaultColor,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.15,
+    depthWrite: false
+  });
+  const innerMesh = new THREE.Mesh(innerGeo, innerMat);
+  innerMesh.position.y = 0.075;
+  group.add(innerMesh);
+
+  // 3. Central flagpole & base stand
+  const pedestalGeo = new THREE.CylinderGeometry(0.5, 0.65, 0.22, 16);
+  const pedestalMat = new THREE.MeshStandardMaterial({
+    color: 0x334155,
+    roughness: 0.6,
+    metalness: 0.5
+  });
+  const pedestal = new THREE.Mesh(pedestalGeo, pedestalMat);
+  pedestal.position.y = 0.11;
+  pedestal.receiveShadow = true;
+  group.add(pedestal);
+
+  const poleHeight = 3.6;
+  const poleGeo = new THREE.CylinderGeometry(0.06, 0.08, poleHeight, 12);
+  const poleMat = new THREE.MeshStandardMaterial({
+    color: 0x94a3b8,
+    metalness: 0.8,
+    roughness: 0.3
+  });
+  const pole = new THREE.Mesh(poleGeo, poleMat);
+  pole.position.y = poleHeight * 0.5 + 0.11;
+  pole.castShadow = true;
+  group.add(pole);
+
+  // 4. Rotating flag & beacon at top
+  const flagMat = new THREE.MeshStandardMaterial({
+    color: defaultColor,
+    roughness: 0.35,
+    metalness: 0.25,
+    emissive: defaultColor,
+    emissiveIntensity: 0.5,
+    side: THREE.DoubleSide
+  });
+
+  const beaconPivot = new THREE.Group();
+  beaconPivot.name = 'BaseBeaconPivot';
+  beaconPivot.position.y = poleHeight + 0.05;
+  group.add(beaconPivot);
+
+  // Flag banner mesh
+  const flagGeo = new THREE.BoxGeometry(0.95, 0.55, 0.04);
+  const flagMesh = new THREE.Mesh(flagGeo, flagMat);
+  flagMesh.position.set(0.48, -0.25, 0);
+  beaconPivot.add(flagMesh);
+
+  // Glowing diamond beacon tip
+  const beaconGem = new THREE.Mesh(new THREE.OctahedronGeometry(0.24, 0), flagMat);
+  beaconGem.position.set(0, 0.28, 0);
+  beaconPivot.add(beaconGem);
+
+  // Top finial
+  const finial = new THREE.Mesh(
+    new THREE.SphereGeometry(0.1, 12, 12),
+    new THREE.MeshStandardMaterial({ color: 0xf1f5f9, metalness: 0.9, roughness: 0.2 })
+  );
+  finial.position.set(0, 0.55, 0);
+  beaconPivot.add(finial);
+
+  let pulseTimer = 0;
+
+  const update = (
+    dt: number,
+    team: 'allies' | 'enemies' | 'contested' | null,
+    progress: number
+  ): void => {
+    pulseTimer += dt;
+    const rotSpeed = team ? 2.0 : 0.8;
+    beaconPivot.rotation.y += dt * rotSpeed;
+
+    let targetHex = defaultColor;
+    if (team === 'allies') {
+      targetHex = 0x22c55e;
+    } else if (team === 'enemies') {
+      targetHex = 0xef4444;
+    } else if (team === 'contested') {
+      targetHex = 0xfacc15;
+    }
+
+    ringMat.color.setHex(targetHex);
+    innerMat.color.setHex(targetHex);
+    flagMat.color.setHex(targetHex);
+    flagMat.emissive.setHex(targetHex);
+
+    const normProgress = progress > 1 ? Math.min(1, progress / 100) : Math.max(0, progress);
+    flagMat.emissiveIntensity = 0.4 + normProgress * 0.8;
+
+    const pulse = Math.sin(pulseTimer * (team === 'contested' ? 8 : 3)) * 0.15;
+    ringMat.opacity = Math.min(1, Math.max(0.4, 0.85 + pulse));
+    innerMat.opacity = Math.min(0.5, Math.max(0.1, 0.15 + normProgress * 0.2 + pulse * 0.05));
+  };
+
+  return {
+    group,
+    ringMat,
+    flagMat,
+    update
+  };
 }

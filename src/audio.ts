@@ -457,6 +457,45 @@ export class SoundEngine {
     }
   }
 
+  /**
+   * Base capture siren alarm (higher sharp pulses for enemy capture, calmer tones for ally capture)
+   */
+  playBaseAlarm(isEnemy: boolean): void {
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+
+    const pulseLen = 0.16;
+    const gap = 0.22;
+
+    for (const offset of [0, gap]) {
+      const t = now + offset;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      if (isEnemy) {
+        // High, sharper alarm for hostile capture (sawtooth 580 Hz -> 440 Hz)
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(580, t);
+        osc.frequency.exponentialRampToValueAtTime(440, t + pulseLen);
+        gain.gain.setValueAtTime(0.18, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + pulseLen);
+      } else {
+        // Calmer, uplifting tone for ally capture (triangle 440 Hz -> 554 Hz)
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(440, t);
+        osc.frequency.exponentialRampToValueAtTime(554, t + pulseLen);
+        gain.gain.setValueAtTime(0.16, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + pulseLen);
+      }
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + pulseLen + 0.02);
+    }
+  }
+
   playPowerUpSpawn(): void {
     this.playArpeggio([523.25, 659.25, 783.99, 1046.5], 0.055, 'sine', 0.12);
   }

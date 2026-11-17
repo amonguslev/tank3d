@@ -90,6 +90,13 @@ const bossBarEl = document.getElementById('boss-bar') as HTMLElement;
 const bossNameEl = document.getElementById('boss-name') as HTMLElement;
 const bossHpTextEl = document.getElementById('boss-hp-text') as HTMLElement;
 const bossHpFillEl = document.getElementById('boss-hp-fill') as HTMLElement;
+const teamBattleHudEl = document.getElementById('team-battle-hud') as HTMLElement;
+const tbAlliesRosterEl = document.getElementById('tb-allies-roster') as HTMLElement;
+const tbEnemiesRosterEl = document.getElementById('tb-enemies-roster') as HTMLElement;
+const tbScoreEl = document.getElementById('tb-score') as HTMLElement;
+const tbCaptureBarEl = document.getElementById('tb-capture-bar') as HTMLElement;
+const tbCaptureFillEl = document.getElementById('tb-capture-fill') as HTMLElement;
+const tbCaptureLabelEl = document.getElementById('tb-capture-label') as HTMLElement;
 const hudKillsEl = document.getElementById('hud-kills') as HTMLElement;
 const hudScoreEl = document.getElementById('hud-score') as HTMLElement;
 const hudCoinsEl = document.getElementById('hud-coins') as HTMLElement;
@@ -135,9 +142,11 @@ const hangarOrbitZoneEl = document.getElementById('hangar-orbit-zone') as HTMLEl
 const offlineBadgeEl = document.getElementById('offline-badge') as HTMLElement;
 const btnPlayWaves = document.getElementById('btn-play-waves') as HTMLButtonElement;
 const btnPlayDuel = document.getElementById('btn-play-duel') as HTMLButtonElement;
+const btnPlayTeam = document.getElementById('btn-play-team') as HTMLButtonElement;
 const hangarCoinsEl = document.getElementById('hangar-coins') as HTMLElement;
 const hangarBestWaveEl = document.getElementById('hangar-best-wave') as HTMLElement;
 const hangarDuelWinsEl = document.getElementById('hangar-duel-wins') as HTMLElement;
+const hangarTeamWinsEl = document.getElementById('hangar-team-wins') as HTMLElement | null;
 const btnHangarMute = document.getElementById('btn-hangar-mute') as HTMLButtonElement;
 const btnHangarTouch = document.getElementById('btn-hangar-touch') as HTMLButtonElement;
 const btnInstall = document.getElementById('btn-install') as HTMLButtonElement;
@@ -256,6 +265,7 @@ function setScreen(mode: ScreenMode): void {
     sniperOverlayEl.classList.add('hidden');
     touchControlsEl.classList.add('hidden');
     waveBannerEl.classList.add('hidden');
+    teamBattleHudEl?.classList.add('hidden');
     clearEnemyPlates();
     updatePointerHint();
     renderHangar();
@@ -273,6 +283,7 @@ function setScreen(mode: ScreenMode): void {
     targetInfoEl.classList.add('hidden');
     sniperOverlayEl.classList.add('hidden');
     touchControlsEl.classList.add('hidden');
+    teamBattleHudEl?.classList.add('hidden');
     clearEnemyPlates();
     updatePointerHint();
   }
@@ -308,6 +319,9 @@ function renderHangar(): void {
   hangarCoinsEl.textContent = data.coins.toLocaleString('uk-UA');
   hangarBestWaveEl.textContent = data.bestWave.toString();
   hangarDuelWinsEl.textContent = data.duelWins.toString();
+  if (hangarTeamWinsEl) {
+    hangarTeamWinsEl.textContent = (data.teamBattleWins ?? 0).toString();
+  }
 
   // Mute button icon
   btnHangarMute.textContent = sound.isMuted() ? '🔇' : '🔊';
@@ -541,6 +555,7 @@ function launchBattle(mode: GameModeKind): void {
 
 btnPlayWaves.addEventListener('click', () => launchBattle('waves'));
 btnPlayDuel.addEventListener('click', () => launchBattle('duel'));
+btnPlayTeam.addEventListener('click', () => launchBattle('team_battle'));
 
 // Test drive toggle
 btnTestDrive.addEventListener('click', () => {
@@ -582,8 +597,16 @@ function updateBattleHud(hud: HudState): void {
   if (currentScreen !== 'battle') return;
 
   // 1. Top status bar
-  hudModeTitleEl.textContent = hud.mode === 'duel' ? '⚔️ ДУЕЛЬ' : 'ХВИЛІ';
-  hudWaveBadgeEl.textContent = hud.mode === 'duel' ? 'БОС 1 НА 1' : `ХВИЛЯ ${hud.waveNumber}`;
+  if (hud.mode === 'duel') {
+    hudModeTitleEl.textContent = '⚔️ ДУЕЛЬ';
+    hudWaveBadgeEl.textContent = 'БОС 1 НА 1';
+  } else if (hud.mode === 'team_battle') {
+    hudModeTitleEl.textContent = '⚔️ КОМАНДНИЙ БІЙ';
+    hudWaveBadgeEl.textContent = '5 НА 5';
+  } else {
+    hudModeTitleEl.textContent = 'ХВИЛІ';
+    hudWaveBadgeEl.textContent = `ХВИЛЯ ${hud.waveNumber}`;
+  }
   hudEnemiesLeftEl.textContent = hud.enemiesRemaining.toString();
   hudKillsEl.textContent = hud.totalKillsInRun.toString();
   hudScoreEl.textContent = hud.score.toString();
@@ -598,6 +621,70 @@ function updateBattleHud(hud: HudState): void {
     bossHpFillEl.style.width = `${bossPercent.toFixed(1)}%`;
   } else {
     bossBarEl.classList.add('hidden');
+  }
+
+  // 2b. Team Battle 5v5 HUD
+  if (hud.teamBattle && teamBattleHudEl) {
+    teamBattleHudEl.classList.remove('hidden');
+
+    if (tbScoreEl) {
+      tbScoreEl.textContent = `${hud.teamBattle.alliesAlive} : ${hud.teamBattle.enemiesAlive}`;
+    }
+
+    const romanTiers = ['I', 'II', 'III', 'IV', 'V'];
+
+    if (tbAlliesRosterEl) {
+      tbAlliesRosterEl.innerHTML = '';
+      for (const ally of hud.teamBattle.alliesRoster) {
+        const pip = document.createElement('div');
+        const roman = romanTiers[ally.tier - 1] ?? ally.tier.toString();
+        pip.className = `tb-tank-pip ally${ally.alive ? '' : ' dead'}${ally.isPlayer ? ' is-player' : ''}`;
+        pip.textContent = roman;
+        pip.title = ally.isPlayer ? `Ти (Рівень ${roman})` : `Союзник (Рівень ${roman})`;
+        tbAlliesRosterEl.appendChild(pip);
+      }
+    }
+
+    if (tbEnemiesRosterEl) {
+      tbEnemiesRosterEl.innerHTML = '';
+      for (const enemy of hud.teamBattle.enemiesRoster) {
+        const pip = document.createElement('div');
+        const roman = romanTiers[enemy.tier - 1] ?? enemy.tier.toString();
+        pip.className = `tb-tank-pip enemy${enemy.alive ? '' : ' dead'}`;
+        pip.textContent = roman;
+        pip.title = `Ворог (Рівень ${roman})`;
+        tbEnemiesRosterEl.appendChild(pip);
+      }
+    }
+
+    if (tbCaptureBarEl && tbCaptureFillEl && tbCaptureLabelEl) {
+      const hasCapture = hud.teamBattle.captureProgress > 0 || hud.teamBattle.captureTeam !== null;
+      if (hasCapture) {
+        tbCaptureBarEl.classList.remove('hidden');
+        const progress = Math.max(0, Math.min(100, hud.teamBattle.captureProgress));
+        tbCaptureFillEl.style.width = `${progress.toFixed(1)}%`;
+
+        tbCaptureBarEl.classList.remove('is-allies', 'is-enemies', 'is-contested');
+
+        const pct = Math.round(progress);
+        if (hud.teamBattle.captureTeam === 'contested') {
+          tbCaptureBarEl.classList.add('is-contested');
+          tbCaptureLabelEl.textContent = `⚔️ БОРОТЬБА ЗА БАЗУ: ${pct}%`;
+        } else if (hud.teamBattle.captureTeam === 'allies') {
+          tbCaptureBarEl.classList.add('is-allies');
+          tbCaptureLabelEl.textContent = `🏳️ ЗАХОПЛЮЄМО БАЗУ: ${pct}%`;
+        } else if (hud.teamBattle.captureTeam === 'enemies') {
+          tbCaptureBarEl.classList.add('is-enemies');
+          tbCaptureLabelEl.textContent = `🚨 ВОРОГ ЗАХОПЛЮЄ БАЗУ: ${pct}%`;
+        } else {
+          tbCaptureLabelEl.textContent = `🏳️ БАЗА: ${pct}%`;
+        }
+      } else {
+        tbCaptureBarEl.classList.add('hidden');
+      }
+    }
+  } else if (teamBattleHudEl) {
+    teamBattleHudEl.classList.add('hidden');
   }
 
   // 3. Player Tank Panel
@@ -773,6 +860,7 @@ function updateEnemyPlates(plates: EnemyPlateScreenItem[]): void {
     }
 
     el.style.display = '';
+    el.classList.toggle('is-ally', Boolean(p.isAlly));
 
     const px = p.screenX ?? (p as { x?: number }).x ?? 0;
     const py = p.screenY ?? (p as { y?: number }).y ?? 0;
@@ -912,6 +1000,44 @@ function renderMinimap(hud: HudState): void {
         ctx.lineTo(ex - 4, ey);
         ctx.closePath();
         ctx.fill();
+      } else if (ent.kind === 'ally') {
+        // Bright green/teal Diamond for allies
+        ctx.fillStyle = '#22c55e';
+        ctx.beginPath();
+        ctx.moveTo(ex, ey - 4);
+        ctx.lineTo(ex + 4, ey);
+        ctx.lineTo(ex, ey + 4);
+        ctx.lineTo(ex - 4, ey);
+        ctx.closePath();
+        ctx.fill();
+      } else if (ent.kind === 'base') {
+        // Central capture base: dashed circle with 'B'
+        let baseColor = '#e2e8f0'; // neutral white
+        if (ent.captureState === 'allies') {
+          baseColor = '#22c55e';
+        } else if (ent.captureState === 'enemies') {
+          baseColor = '#ef4444';
+        } else if (ent.captureState === 'contested') {
+          baseColor = '#f59e0b';
+        }
+
+        ctx.save();
+        ctx.setLineDash([4, 3]);
+        ctx.strokeStyle = baseColor;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(ex, ey, 11, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
+        ctx.fill();
+        ctx.restore();
+
+        ctx.fillStyle = baseColor;
+        ctx.font = 'bold 9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('B', ex, ey);
       } else if (ent.kind === 'boss') {
         // Boss Diamond (Large gold-red)
         ctx.fillStyle = '#f59e0b';
@@ -965,21 +1091,36 @@ function renderMinimap(hud: HudState): void {
 function handleBattleEnd(summary: BattleSummary): void {
   storage.recordBattleResult(summary);
 
-  resultTitleEl.textContent = summary.victory ? 'ПЕРЕМОГА!' : 'ПОРАЗКА!';
-  resultTitleEl.style.color = summary.victory ? 'var(--wot-gold)' : 'var(--wot-red)';
-  resultSubtitleEl.textContent = summary.victory
-    ? summary.mode === 'duel'
+  if (summary.mode === 'team_battle') {
+    resultTitleEl.textContent = summary.victory ? 'ПЕРЕМОГА КОМАНДИ!' : 'ПОРАЗКА КОМАНДИ';
+    resultSubtitleEl.textContent = summary.victory
+      ? 'Ворожу команду розбито або їхню базу захоплено!'
+      : 'Союзні сили знищено або ворог захопив базу.';
+  } else if (summary.mode === 'duel') {
+    resultTitleEl.textContent = summary.victory ? 'ПЕРЕМОГА!' : 'ПОРАЗКА!';
+    resultSubtitleEl.textContent = summary.victory
       ? 'Чемпіона розгромлено! Блискуча дуельна перемога!'
-      : 'Хвилю успішно відбито! Позиції збережено.'
-    : 'Твій танк підбито ворожими снарядами.';
+      : 'Твій танк підбито ворожими снарядами.';
+  } else {
+    resultTitleEl.textContent = summary.victory ? 'ПЕРЕМОГА!' : 'ПОРАЗКА!';
+    resultSubtitleEl.textContent = summary.victory
+      ? 'Хвилю успішно відбито! Позиції збережено.'
+      : 'Твій танк підбито ворожими снарядами.';
+  }
+  resultTitleEl.style.color = summary.victory ? 'var(--wot-gold)' : 'var(--wot-red)';
 
-  resWaveEl.textContent = summary.waveReached.toString();
+  resWaveEl.textContent = summary.mode === 'team_battle' ? '5v5' : summary.waveReached.toString();
   resKillsEl.textContent = summary.kills.toString();
   resDamageEl.textContent = summary.damageDealt.toString();
   resCoinsEl.textContent = `+${summary.coinsEarned} 🪙`;
   resScoreEl.textContent = summary.score.toString();
 
-  btnPlayAgain.textContent = summary.mode === 'duel' ? '⚔️ Нова дуель' : '⚔️ Наступний бій';
+  btnPlayAgain.textContent =
+    summary.mode === 'duel'
+      ? '⚔️ Нова дуель'
+      : summary.mode === 'team_battle'
+        ? '⚔️ Новий командний бій'
+        : '⚔️ Наступний бій';
 
   setScreen('result');
 

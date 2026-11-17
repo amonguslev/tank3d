@@ -40,6 +40,7 @@ function createDefaultSave(): SaveData {
     bestWave: 0,
     bestScore: 0,
     duelWins: 0,
+    teamBattleWins: 0,
     totalKills: 0,
     muted: false,
     touchEnabled: null
@@ -103,6 +104,7 @@ export class StorageManager {
           bestWave: typeof parsed.bestWave === 'number' && parsed.bestWave >= 0 ? parsed.bestWave : 0,
           bestScore: typeof parsed.bestScore === 'number' && parsed.bestScore >= 0 ? parsed.bestScore : 0,
           duelWins: typeof parsed.duelWins === 'number' && parsed.duelWins >= 0 ? parsed.duelWins : 0,
+          teamBattleWins: typeof parsed.teamBattleWins === 'number' && parsed.teamBattleWins >= 0 ? parsed.teamBattleWins : 0,
           totalKills: typeof parsed.totalKills === 'number' && parsed.totalKills >= 0 ? parsed.totalKills : 0,
           muted: Boolean(parsed.muted),
           touchEnabled: typeof parsed.touchEnabled === 'boolean' ? parsed.touchEnabled : null
@@ -316,6 +318,10 @@ export class StorageManager {
 
     if (result.mode === 'duel' && result.victory) {
       this.data.duelWins += 1;
+    }
+
+    if (result.mode === 'team_battle' && result.victory) {
+      this.data.teamBattleWins += 1;
     }
 
     if (typeof result.coinsEarned === 'number' && result.coinsEarned > 0) {

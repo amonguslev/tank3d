@@ -1,4 +1,6 @@
-export type GameModeKind = 'waves' | 'duel';
+export type GameModeKind = 'waves' | 'duel' | 'team_battle';
+
+export type TeamSide = 'allies' | 'enemies';
 
 export type MapBiomeId = 'hills' | 'desert' | 'arctic';
 
@@ -98,16 +100,46 @@ export interface SaveData {
   bestWave: number;
   bestScore: number;
   duelWins: number;
+  teamBattleWins: number;
   totalKills: number;
   muted: boolean;
   touchEnabled: boolean | null;
 }
 
 export interface MinimapEntity {
-  kind: 'player' | 'enemy' | 'boss' | 'pickup';
+  kind: 'player' | 'enemy' | 'boss' | 'pickup' | 'ally' | 'base';
   x: number;
   z: number;
   yaw?: number;
+  captureState?: TeamSide | 'contested' | null;
+}
+
+export interface EnemyPlateInfo {
+  id: number;
+  romanTier: string;
+  name: string;
+  hp: number;
+  maxHp: number;
+  isBoss: boolean;
+  screenX: number;
+  screenY: number;
+  hpPercent?: number;
+  isAlly?: boolean;
+}
+
+export interface TeamRosterEntry {
+  tier: number;
+  alive: boolean;
+  isPlayer?: boolean;
+}
+
+export interface TeamBattleHudState {
+  alliesAlive: number;
+  enemiesAlive: number;
+  alliesRoster: TeamRosterEntry[];
+  enemiesRoster: TeamRosterEntry[];
+  captureProgress: number; // 0..100
+  captureTeam: TeamSide | 'contested' | null;
 }
 
 export interface HudState {
@@ -151,6 +183,7 @@ export interface HudState {
   hullYaw: number;
   turretYaw: number;
   minimapEntities: MinimapEntity[];
+  teamBattle?: TeamBattleHudState | null;
 }
 
 export interface FloatingTextItem {

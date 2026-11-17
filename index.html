@@ -129,6 +129,21 @@
                 <div id="boss-hp-fill" class="boss-hp-fill" style="width: 100%"></div>
               </div>
             </div>
+
+            <!-- Team Battle 5v5 HUD -->
+            <div id="team-battle-hud" class="team-battle-hud hidden">
+              <div class="tb-roster-bar">
+                <div id="tb-allies-roster" class="tb-roster tb-allies"></div>
+                <div id="tb-score" class="tb-score">5 : 5</div>
+                <div id="tb-enemies-roster" class="tb-roster tb-enemies"></div>
+              </div>
+              <div id="tb-capture-bar" class="tb-capture-bar hidden">
+                <div class="tb-capture-track">
+                  <div id="tb-capture-fill" class="tb-capture-fill" style="width: 0%"></div>
+                </div>
+                <div id="tb-capture-label" class="tb-capture-label">🏳️ ЗАХОПЛЕННЯ БАЗИ 0%</div>
+              </div>
+            </div>
           </div>
 
           <div class="hud-top-right">
@@ -293,6 +308,10 @@
               <span class="battle-btn-title">⚔️ БИТВА 1 НА 1</span>
               <span class="battle-btn-sub">ДУЕЛЬ З ЧЕМПІОНОМ</span>
             </button>
+            <button id="btn-play-team" class="wot-team-btn" type="button">
+              <span class="battle-btn-title">⚔️ КОМАНДНИЙ БІЙ 5v5</span>
+              <span class="battle-btn-sub">5 НА 5 • ЗАХОПЛЕННЯ БАЗИ</span>
+            </button>
           </div>
 
           <!-- Top Right Stats & Controls -->
@@ -310,6 +329,10 @@
               <div class="record-item">
                 <span class="rec-label">Дуелі:</span>
                 <strong id="hangar-duel-wins">0</strong>
+              </div>
+              <div class="record-item">
+                <span class="rec-label">5v5:</span>
+                <strong id="hangar-team-wins">0</strong>
               </div>
             </div>
 
