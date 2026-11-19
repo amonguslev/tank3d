@@ -267,6 +267,7 @@ function setScreen(mode: ScreenMode): void {
     arcadeReticleEl.classList.add('hidden');
     targetInfoEl.classList.add('hidden');
     sniperOverlayEl.classList.add('hidden');
+    sniperOverlayEl.classList.remove('is-artillery-mode');
     touchControlsEl.classList.add('hidden');
     waveBannerEl.classList.add('hidden');
     teamBattleHudEl?.classList.add('hidden');
@@ -286,6 +287,7 @@ function setScreen(mode: ScreenMode): void {
     arcadeReticleEl.classList.add('hidden');
     targetInfoEl.classList.add('hidden');
     sniperOverlayEl.classList.add('hidden');
+    sniperOverlayEl.classList.remove('is-artillery-mode');
     touchControlsEl.classList.add('hidden');
     teamBattleHudEl?.classList.add('hidden');
     clearEnemyPlates();
@@ -740,7 +742,7 @@ function updateBattleHud(hud: HudState): void {
     slot1NameEl.textContent = tankSpec.primaryWeapon.shortName;
   }
   if (slot2NameEl) {
-    slot2NameEl.textContent = tankSpec.secondaryWeapon?.shortName ?? 'Міні-арта';
+    slot2NameEl.textContent = `${tankSpec.secondaryWeapon?.shortName ?? 'Арта'} [${hud.artyShotsLeft}/${hud.artyShotsMax}]`;
   }
 
   const hpPercent = Math.max(0, Math.min(100, (hud.playerHp / hud.playerMaxHp) * 100));
@@ -829,22 +831,38 @@ function updateBattleHud(hud: HudState): void {
   if (hud.isSniper) {
     arcadeReticleEl.classList.add('hidden');
     sniperOverlayEl.classList.remove('hidden');
+    sniperOverlayEl.classList.toggle('is-artillery-mode', hud.isArtilleryMode);
 
     sniperDistanceEl.textContent = `${Math.round(hud.aimDistanceMeters)} м`;
     sniperZoomLabelEl.textContent = `x${hud.sniperZoom}`;
-    sniperWeaponLabelEl.textContent =
-      hud.activeWeaponSlot === 1 ? hud.primaryWeaponName : (hud.secondaryWeaponName ?? 'Міні-арта');
 
-    if (activeReloadLeft > 0 && activeReloadTotal > 0) {
-      const readyRatio = 1 - Math.max(0, Math.min(1, activeReloadLeft / activeReloadTotal));
-      sniperReloadFillEl.style.width = `${(readyRatio * 100).toFixed(1)}%`;
-      sniperReloadTextEl.textContent = `ПЕРЕЗАРЯДКА ${activeReloadLeft.toFixed(1)}с`;
+    if (hud.isArtilleryMode) {
+      sniperWeaponLabelEl.textContent = '🛰️ СУПУТНИКОВИЙ АРТ-ПРИЦІЛ';
+
+      if (hud.artyShotsLeft > 0) {
+        sniperReloadTextEl.textContent = `АРТА ГОТОВА [${hud.artyShotsLeft}/${hud.artyShotsMax}]`;
+        sniperReloadFillEl.style.width = '100%';
+      } else {
+        sniperReloadTextEl.textContent = `ПЕРЕЗАРЯДКА ${activeReloadLeft.toFixed(1)}с`;
+        const readyRatio = 1 - Math.max(0, Math.min(1, activeReloadLeft / (activeReloadTotal || 10)));
+        sniperReloadFillEl.style.width = `${(readyRatio * 100).toFixed(1)}%`;
+      }
     } else {
-      sniperReloadFillEl.style.width = '100%';
-      sniperReloadTextEl.textContent = 'ГОТОВИЙ';
+      sniperWeaponLabelEl.textContent =
+        hud.activeWeaponSlot === 1 ? hud.primaryWeaponName : (hud.secondaryWeaponName ?? 'Арта');
+
+      if (activeReloadLeft > 0 && activeReloadTotal > 0) {
+        const readyRatio = 1 - Math.max(0, Math.min(1, activeReloadLeft / activeReloadTotal));
+        sniperReloadFillEl.style.width = `${(readyRatio * 100).toFixed(1)}%`;
+        sniperReloadTextEl.textContent = `ПЕРЕЗАРЯДКА ${activeReloadLeft.toFixed(1)}с`;
+      } else {
+        sniperReloadFillEl.style.width = '100%';
+        sniperReloadTextEl.textContent = 'ГОТОВИЙ';
+      }
     }
   } else {
     sniperOverlayEl.classList.add('hidden');
+    sniperOverlayEl.classList.remove('is-artillery-mode');
     arcadeReticleEl.classList.remove('hidden');
 
     if (activeReloadLeft > 0) {

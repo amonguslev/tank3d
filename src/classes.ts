@@ -184,6 +184,17 @@ export const TANK_SPECS: Record<TankTierId, TankTierSpec> = {
       projectileStyle: 'ap',
       aoeRadius: 0,
       dispersionDeg: 0.8
+    },
+    secondaryWeapon: {
+      slot: 2,
+      name: 'Легка арта "Град"',
+      shortName: 'Арта',
+      damage: 130,
+      reloadSec: 10.0,
+      projectileSpeed: 44,
+      projectileStyle: 'mini_artillery',
+      aoeRadius: 4.8,
+      dispersionDeg: 0.8
     }
   },
   tier2: {
@@ -215,6 +226,17 @@ export const TANK_SPECS: Record<TankTierId, TankTierSpec> = {
       projectileStyle: 'ap',
       aoeRadius: 0,
       dispersionDeg: 0.7
+    },
+    secondaryWeapon: {
+      slot: 2,
+      name: 'Артилерійська батарея',
+      shortName: 'Арта',
+      damage: 180,
+      reloadSec: 10.0,
+      projectileSpeed: 46,
+      projectileStyle: 'mini_artillery',
+      aoeRadius: 5.2,
+      dispersionDeg: 0.75
     }
   },
   tier3: {
@@ -246,6 +268,17 @@ export const TANK_SPECS: Record<TankTierId, TankTierSpec> = {
       projectileStyle: 'heavy',
       aoeRadius: 0,
       dispersionDeg: 0.65
+    },
+    secondaryWeapon: {
+      slot: 2,
+      name: 'Важкий арт-дивізіон',
+      shortName: 'Арта',
+      damage: 240,
+      reloadSec: 10.0,
+      projectileSpeed: 48,
+      projectileStyle: 'mini_artillery',
+      aoeRadius: 5.8,
+      dispersionDeg: 0.7
     }
   },
   tier4: {
@@ -277,6 +310,17 @@ export const TANK_SPECS: Record<TankTierId, TankTierSpec> = {
       projectileStyle: 'he',
       aoeRadius: 4.5,
       dispersionDeg: 0.85
+    },
+    secondaryWeapon: {
+      slot: 2,
+      name: 'Гаубичний арт-удар',
+      shortName: 'Арта',
+      damage: 310,
+      reloadSec: 10.0,
+      projectileSpeed: 50,
+      projectileStyle: 'mini_artillery',
+      aoeRadius: 6.4,
+      dispersionDeg: 0.65
     }
   },
   tier5: {
@@ -313,14 +357,14 @@ export const TANK_SPECS: Record<TankTierId, TankTierSpec> = {
     },
     secondaryWeapon: {
       slot: 2,
-      name: 'Задня міні-арта "Джміль"',
-      shortName: 'Міні-Арта',
-      damage: 38,
-      reloadSec: 0.22,
-      projectileSpeed: 46,
+      name: 'Орбітальна арта "Джміль"',
+      shortName: 'Арта',
+      damage: 380,
+      reloadSec: 10.0,
+      projectileSpeed: 54,
       projectileStyle: 'mini_artillery',
-      aoeRadius: 2.2,
-      dispersionDeg: 1.4
+      aoeRadius: 7.2,
+      dispersionDeg: 0.5
     }
   }
 };

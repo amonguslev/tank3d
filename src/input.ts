@@ -28,6 +28,7 @@ export interface WotInputSnapshot {
   pauseRequest: boolean; // одноразовий запит паузи (Escape, P)
   pointerLocked: boolean; // чи захоплений курсор Pointer Lock
   touchMode: boolean; // чи активний сенсорний режим
+  mouseNdc?: { x: number; y: number } | null;
 }
 
 export class InputManager {
@@ -573,7 +574,8 @@ export class InputManager {
       repairRequest: this.repairRequest,
       pauseRequest: this.pauseRequest,
       pointerLocked: this.pointerLocked,
-      touchMode: this.isTouchActive()
+      touchMode: this.isTouchActive(),
+      mouseNdc: this.mouseNdc ? { ...this.mouseNdc } : null
     };
 
     // Reset single-shot flags

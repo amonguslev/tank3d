@@ -210,6 +210,15 @@ export class TankGame3D {
   private playerFrontRecoil = 0;
   private playerRearRecoil = 0;
 
+  // Satellite Artillery Systems
+  private artyShotsLeft = 2;
+  private artyShotsMax = 2;
+  private artyInterShotCooldown = 0;
+  private artyAimPos = new THREE.Vector2(0, 0);
+  private artyReticleMesh: THREE.Group | null = null;
+  private lastInputYaw = 0;
+  private lastInputPitch = 0;
+
   // Power-up Buff Timers
   private damageBoostTimer = 0;
   private speedBoostTimer = 0;
@@ -402,6 +411,19 @@ export class TankGame3D {
     this.speedBoostTimer = 0;
     this.shieldTimer = 0;
     this.playerRig.shieldMesh.visible = false;
+
+    // Reset Artillery Satellite status
+    this.artyShotsLeft = this.artyShotsMax;
+    this.artyInterShotCooldown = 0;
+    this.artyAimPos.set(this.playerX, this.playerZ);
+    this.lastInputYaw = spawn.yaw;
+    this.lastInputPitch = -0.05;
+
+    if (!this.artyReticleMesh) {
+      this.artyReticleMesh = this.createArtilleryReticleMesh();
+    }
+    this.artyReticleMesh.visible = false;
+    this.battleScene.add(this.artyReticleMesh);
 
     // Run counters
     this.score = 0;
@@ -995,7 +1017,18 @@ export class TankGame3D {
     }
 
     if (this.secondaryReloadLeft > 0) {
+      const prevSecondary = this.secondaryReloadLeft;
       this.secondaryReloadLeft = Math.max(0, this.secondaryReloadLeft - dt);
+      if (prevSecondary > 0 && this.secondaryReloadLeft === 0) {
+        this.artyShotsLeft = this.artyShotsMax;
+        this.audio.playReloadReady();
+      }
+    } else if (this.artyShotsLeft < this.artyShotsMax) {
+      this.artyShotsLeft = this.artyShotsMax;
+    }
+
+    if (this.artyInterShotCooldown > 0) {
+      this.artyInterShotCooldown = Math.max(0, this.artyInterShotCooldown - dt);
     }
 
     if (this.repairCooldownLeft > 0) {
@@ -1131,9 +1164,9 @@ export class TankGame3D {
     ).normalize();
 
     // Active Turret & Anchor selection
-    const isSlot2 = this.activeWeaponSlot === 2 && this.playerRig.rearTurretPivot !== null;
-    const activeTurretPivot = isSlot2 ? this.playerRig.rearTurretPivot! : this.playerRig.frontTurretPivot;
-    const activeSniperAnchor = isSlot2 ? this.playerRig.rearSniperAnchor! : this.playerRig.frontSniperAnchor;
+    const isSlot2 = this.activeWeaponSlot === 2;
+    const activeTurretPivot = (isSlot2 && this.playerRig.rearTurretPivot) ? this.playerRig.rearTurretPivot : this.playerRig.frontTurretPivot;
+    const activeSniperAnchor = (isSlot2 && this.playerRig.rearSniperAnchor) ? this.playerRig.rearSniperAnchor : this.playerRig.frontSniperAnchor;
 
     // Trigger sniper scope toggle sound on state change
     if (snap.isSniper !== this.wasSniper) {
@@ -1141,73 +1174,126 @@ export class TankGame3D {
       this.audio.playSniperToggle(snap.isSniper);
     }
 
-    if (snap.isSniper) {
-      // Sniper Scope View: hide only the active turret, keep other turret visible
-      this.playerRig.frontTurretPivot.visible = isSlot2;
-      if (this.playerRig.rearTurretPivot) {
-        this.playerRig.rearTurretPivot.visible = !isSlot2;
-      }
-
-      const anchorPos = new THREE.Vector3();
-      activeSniperAnchor.getWorldPosition(anchorPos);
-
-      // Camera stands right at sniper anchor optic
-      this.camera.position.copy(anchorPos);
-      this.camera.lookAt(anchorPos.clone().add(this.cameraLookDir.clone().multiplyScalar(40)));
-
-      // Optical Zoom FOV
-      const targetFov = snap.sniperZoom === 4 ? 15 : 28;
-      if (Math.abs(this.camera.fov - targetFov) > 0.1) {
-        this.camera.fov = targetFov;
-        this.camera.updateProjectionMatrix();
-      }
-    } else {
-      // 3rd Person World of Tanks Cinematic View
+    if (isSlot2 && snap.isSniper) {
+      // 🛰️ Супутниковий режим артилерії: вид зверху на всю карту
       this.playerRig.frontTurretPivot.visible = true;
       if (this.playerRig.rearTurretPivot) {
         this.playerRig.rearTurretPivot.visible = true;
       }
 
-      if (this.camera.fov !== 58) {
-        this.camera.fov = 58;
+      this.camera.position.set(0, 94, 8);
+      this.camera.lookAt(0, 0, 0);
+
+      if (Math.abs(this.camera.fov - 68) > 0.1) {
+        this.camera.fov = 68;
         this.camera.updateProjectionMatrix();
       }
 
-      const pivotWorldPos = new THREE.Vector3();
-      activeTurretPivot.getWorldPosition(pivotWorldPos);
-
-      const anchorPos = pivotWorldPos.clone().add(
-        new THREE.Vector3(0, isSlot2 ? 1.15 : 1.55, 0)
-      );
-
-      // Desired distance behind tank
-      let camDist = 8.0;
-      if (this.playerTierId === 'tier5') {
-        camDist = isSlot2 ? 6.8 : 9.5;
+      // Керування точкою прицілу artyAimPos:
+      if (snap.pointerLocked) {
+        let dYaw = snap.cameraYaw - this.lastInputYaw;
+        let dPitch = snap.cameraPitch - this.lastInputPitch;
+        while (dYaw < -Math.PI) dYaw += Math.PI * 2;
+        while (dYaw > Math.PI) dYaw -= Math.PI * 2;
+        this.artyAimPos.x += dYaw * 40;
+        this.artyAimPos.y -= dPitch * 40;
+      } else if (snap.mouseNdc) {
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(new THREE.Vector2(snap.mouseNdc.x, snap.mouseNdc.y), this.camera);
+        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        const intersect = new THREE.Vector3();
+        if (raycaster.ray.intersectPlane(groundPlane, intersect)) {
+          this.artyAimPos.set(intersect.x, intersect.z);
+        }
       }
 
-      const desiredCamPos = anchorPos.clone()
-        .sub(this.cameraLookDir.clone().multiplyScalar(camDist))
-        .add(new THREE.Vector3(0, 0.88, 0));
+      this.artyAimPos.x = Math.max(-58, Math.min(58, this.artyAimPos.x));
+      this.artyAimPos.y = Math.max(-58, Math.min(58, this.artyAimPos.y));
 
-      // Terrain collision clamp (never clip below ground)
-      const minCamY = this.arena.getHeightAt(desiredCamPos.x, desiredCamPos.z) + 0.85;
-      if (desiredCamPos.y < minCamY) {
-        desiredCamPos.y = minCamY;
+      this.lastInputYaw = snap.cameraYaw;
+      this.lastInputPitch = snap.cameraPitch;
+
+      if (this.artyReticleMesh) {
+        const groundY = this.arena.getHeightAt(this.artyAimPos.x, this.artyAimPos.y);
+        this.artyReticleMesh.position.set(this.artyAimPos.x, groundY + 0.12, this.artyAimPos.y);
+        this.artyReticleMesh.visible = true;
       }
-
-      // Smooth camera interpolation
-      this.camera.position.lerp(desiredCamPos, Math.min(1, 14 * dt));
-
-      // Apply screen shake
-      if (this.screenShakeIntensity > 0) {
-        this.camera.position.x += (Math.random() - 0.5) * this.screenShakeIntensity;
-        this.camera.position.y += (Math.random() - 0.5) * this.screenShakeIntensity;
-        this.screenShakeIntensity = Math.max(0, this.screenShakeIntensity - dt * 2.5);
+    } else {
+      if (this.artyReticleMesh) {
+        this.artyReticleMesh.visible = false;
       }
+      this.lastInputYaw = snap.cameraYaw;
+      this.lastInputPitch = snap.cameraPitch;
 
-      // Look along lookDir
-      this.camera.lookAt(this.camera.position.clone().add(this.cameraLookDir.clone().multiplyScalar(40)));
+      if (snap.isSniper) {
+        // Sniper Scope View: hide only the active turret, keep other turret visible
+        const hasRear = this.playerRig.rearTurretPivot !== null;
+        this.playerRig.frontTurretPivot.visible = isSlot2 && hasRear;
+        if (this.playerRig.rearTurretPivot) {
+          this.playerRig.rearTurretPivot.visible = !isSlot2;
+        }
+
+        const anchorPos = new THREE.Vector3();
+        activeSniperAnchor.getWorldPosition(anchorPos);
+
+        // Camera stands right at sniper anchor optic
+        this.camera.position.copy(anchorPos);
+        this.camera.lookAt(anchorPos.clone().add(this.cameraLookDir.clone().multiplyScalar(40)));
+
+        // Optical Zoom FOV
+        const targetFov = snap.sniperZoom === 4 ? 15 : 28;
+        if (Math.abs(this.camera.fov - targetFov) > 0.1) {
+          this.camera.fov = targetFov;
+          this.camera.updateProjectionMatrix();
+        }
+      } else {
+        // 3rd Person World of Tanks Cinematic View
+        this.playerRig.frontTurretPivot.visible = true;
+        if (this.playerRig.rearTurretPivot) {
+          this.playerRig.rearTurretPivot.visible = true;
+        }
+
+        if (this.camera.fov !== 58) {
+          this.camera.fov = 58;
+          this.camera.updateProjectionMatrix();
+        }
+
+        const pivotWorldPos = new THREE.Vector3();
+        activeTurretPivot.getWorldPosition(pivotWorldPos);
+
+        const anchorPos = pivotWorldPos.clone().add(
+          new THREE.Vector3(0, (isSlot2 && this.playerRig.rearTurretPivot) ? 1.15 : 1.55, 0)
+        );
+
+        // Desired distance behind tank
+        let camDist = 8.0;
+        if (this.playerTierId === 'tier5') {
+          camDist = (isSlot2 && this.playerRig.rearTurretPivot) ? 6.8 : 9.5;
+        }
+
+        const desiredCamPos = anchorPos.clone()
+          .sub(this.cameraLookDir.clone().multiplyScalar(camDist))
+          .add(new THREE.Vector3(0, 0.88, 0));
+
+        // Terrain collision clamp (never clip below ground)
+        const minCamY = this.arena.getHeightAt(desiredCamPos.x, desiredCamPos.z) + 0.85;
+        if (desiredCamPos.y < minCamY) {
+          desiredCamPos.y = minCamY;
+        }
+
+        // Smooth camera interpolation
+        this.camera.position.lerp(desiredCamPos, Math.min(1, 14 * dt));
+
+        // Apply screen shake
+        if (this.screenShakeIntensity > 0) {
+          this.camera.position.x += (Math.random() - 0.5) * this.screenShakeIntensity;
+          this.camera.position.y += (Math.random() - 0.5) * this.screenShakeIntensity;
+          this.screenShakeIntensity = Math.max(0, this.screenShakeIntensity - dt * 2.5);
+        }
+
+        // Look along lookDir
+        this.camera.lookAt(this.camera.position.clone().add(this.cameraLookDir.clone().multiplyScalar(40)));
+      }
     }
   }
 
@@ -1218,6 +1304,9 @@ export class TankGame3D {
   private updateTurretAiming(snap: WotInputSnapshot, dt: number): void {
     if (!this.arena || !this.playerRig) return;
 
+    const isSlot2 = this.activeWeaponSlot === 2;
+    const isArtillery = isSlot2 && snap.isSniper;
+
     // Raycast from camera along lookDir to find 3D aim target
     const rayOrigin = this.camera.position.clone();
     const rayDir = this.cameraLookDir.clone();
@@ -1227,31 +1316,48 @@ export class TankGame3D {
     let hitPoint = rayOrigin.clone().addScaledVector(rayDir, closestDist);
     let lockedEnemy: ActiveEnemy | null = null;
 
-    // 1. Check against enemies
-    for (const enemy of this.activeEnemies) {
-      if (enemy.hp <= 0 || enemy.team !== 'enemies') continue;
-      const enemyCenter = new THREE.Vector3(enemy.x, enemy.groundY + 1.2, enemy.z);
-      const toCenter = enemyCenter.clone().sub(rayOrigin);
-      const proj = toCenter.dot(rayDir);
-      if (proj > 2 && proj < closestDist) {
-        const perpDist = toCenter.clone().sub(rayDir.clone().multiplyScalar(proj)).length();
-        if (perpDist < enemy.rig.halfWidth * 1.35) {
-          closestDist = proj;
-          hitPoint = rayOrigin.clone().addScaledVector(rayDir, proj);
+    if (isArtillery) {
+      // 🛰️ Супутниковий режим артилерії: ціль точно в точці прицілу artyAimPos на землі
+      const targetY = this.arena.getHeightAt(this.artyAimPos.x, this.artyAimPos.y);
+      hitPoint = new THREE.Vector3(this.artyAimPos.x, targetY, this.artyAimPos.y);
+
+      let bestDist = 6.5;
+      for (const enemy of this.activeEnemies) {
+        if (enemy.hp <= 0 || enemy.team !== 'enemies') continue;
+        const d = Math.hypot(enemy.x - this.artyAimPos.x, enemy.z - this.artyAimPos.y);
+        if (d < bestDist) {
+          bestDist = d;
           lockedEnemy = enemy;
         }
       }
-    }
+      closestDist = Math.hypot(this.playerX - this.artyAimPos.x, this.playerZ - this.artyAimPos.y);
+    } else {
+      // 1. Check against enemies
+      for (const enemy of this.activeEnemies) {
+        if (enemy.hp <= 0 || enemy.team !== 'enemies') continue;
+        const enemyCenter = new THREE.Vector3(enemy.x, enemy.groundY + 1.2, enemy.z);
+        const toCenter = enemyCenter.clone().sub(rayOrigin);
+        const proj = toCenter.dot(rayDir);
+        if (proj > 2 && proj < closestDist) {
+          const perpDist = toCenter.clone().sub(rayDir.clone().multiplyScalar(proj)).length();
+          if (perpDist < enemy.rig.halfWidth * 1.35) {
+            closestDist = proj;
+            hitPoint = rayOrigin.clone().addScaledVector(rayDir, proj);
+            lockedEnemy = enemy;
+          }
+        }
+      }
 
-    // 2. Raymarch terrain if no enemy hit closer
-    if (!lockedEnemy) {
-      for (let d = 8; d < closestDist; d += 2.5) {
-        const testP = rayOrigin.clone().addScaledVector(rayDir, d);
-        const terrY = this.arena.getHeightAt(testP.x, testP.z);
-        if (testP.y <= terrY) {
-          closestDist = d;
-          hitPoint = testP;
-          break;
+      // 2. Raymarch terrain if no enemy hit closer
+      if (!lockedEnemy) {
+        for (let d = 8; d < closestDist; d += 2.5) {
+          const testP = rayOrigin.clone().addScaledVector(rayDir, d);
+          const terrY = this.arena.getHeightAt(testP.x, testP.z);
+          if (testP.y <= terrY) {
+            closestDist = d;
+            hitPoint = testP;
+            break;
+          }
         }
       }
     }
@@ -1269,10 +1375,9 @@ export class TankGame3D {
     }
 
     // Active Turret & Gun selection
-    const isSlot2 = this.activeWeaponSlot === 2 && this.playerRig.rearTurretPivot !== null;
-    const activeTurretPivot = isSlot2 ? this.playerRig.rearTurretPivot! : this.playerRig.frontTurretPivot;
-    const activeGunPivot = isSlot2 ? this.playerRig.rearGunPivot! : this.playerRig.frontGunPivot;
-    const activeMuzzle = isSlot2 ? this.playerRig.rearMuzzle! : this.playerRig.frontMuzzle;
+    const activeTurretPivot = (isSlot2 && this.playerRig.rearTurretPivot) ? this.playerRig.rearTurretPivot : this.playerRig.frontTurretPivot;
+    const activeGunPivot = (isSlot2 && this.playerRig.rearGunPivot) ? this.playerRig.rearGunPivot : this.playerRig.frontGunPivot;
+    const activeMuzzle = (isSlot2 && this.playerRig.rearMuzzle) ? this.playerRig.rearMuzzle : this.playerRig.frontMuzzle;
 
     // Rotate Turret towards hitPoint in Hull local space
     const hullGroup = this.playerRig.hullGroup;
@@ -1303,25 +1408,36 @@ export class TankGame3D {
     this.playerGunPitch = activeGunPivot.rotation.x;
 
     // Dynamic Reticle Convergence: project actual barrel aim point onto screen
-    const muzzlePos = new THREE.Vector3();
-    activeMuzzle.getWorldPosition(muzzlePos);
+    if (isArtillery) {
+      const proj = hitPoint.clone().project(this.camera);
+      const dxPx = (proj.x * window.innerWidth) / 2;
+      const dyPx = (-proj.y * window.innerHeight) / 2;
+      this.callbacks.onTurretAimUpdate?.({
+        dxPx: Math.round(dxPx),
+        dyPx: Math.round(dyPx),
+        converged: true
+      });
+    } else {
+      const muzzlePos = new THREE.Vector3();
+      activeMuzzle.getWorldPosition(muzzlePos);
 
-    const barrelDir = new THREE.Vector3(0, 0, 1)
-      .applyQuaternion(activeGunPivot.getWorldQuaternion(new THREE.Quaternion()))
-      .normalize();
+      const barrelDir = new THREE.Vector3(0, 0, 1)
+        .applyQuaternion(activeGunPivot.getWorldQuaternion(new THREE.Quaternion()))
+        .normalize();
 
-    const barrelAimPoint = muzzlePos.clone().addScaledVector(barrelDir, this.aimDistanceMeters);
-    const proj = barrelAimPoint.clone().project(this.camera);
+      const barrelAimPoint = muzzlePos.clone().addScaledVector(barrelDir, this.aimDistanceMeters);
+      const proj = barrelAimPoint.clone().project(this.camera);
 
-    const dxPx = (proj.x * window.innerWidth) / 2;
-    const dyPx = (-proj.y * window.innerHeight) / 2;
-    const distPx = Math.hypot(dxPx, dyPx);
+      const dxPx = (proj.x * window.innerWidth) / 2;
+      const dyPx = (-proj.y * window.innerHeight) / 2;
+      const distPx = Math.hypot(dxPx, dyPx);
 
-    this.callbacks.onTurretAimUpdate?.({
-      dxPx: Math.round(dxPx),
-      dyPx: Math.round(dyPx),
-      converged: distPx < 16
-    });
+      this.callbacks.onTurretAimUpdate?.({
+        dxPx: Math.round(dxPx),
+        dyPx: Math.round(dyPx),
+        converged: distPx < 16
+      });
+    }
   }
 
   // ==========================================================================
@@ -1329,23 +1445,33 @@ export class TankGame3D {
   // ==========================================================================
 
   private handlePlayerFiring(): void {
-    if (!this.playerRig) return;
+    if (!this.playerRig || !this.arena) return;
 
-    const isSlot2 = this.activeWeaponSlot === 2 && this.playerStats.secondaryWeapon !== null;
-    const weapon = isSlot2 ? this.playerStats.secondaryWeapon! : this.playerStats.primaryWeapon;
+    const isSlot2 = this.activeWeaponSlot === 2;
+    const weapon = (isSlot2 && this.playerStats.secondaryWeapon) ? this.playerStats.secondaryWeapon : this.playerStats.primaryWeapon;
 
     if (isSlot2) {
-      if (this.secondaryReloadLeft > 0) return;
-      this.secondaryReloadLeft = weapon.reloadSec;
+      if (this.secondaryReloadLeft > 0 || this.artyInterShotCooldown > 0) return;
+
+      this.artyShotsLeft--;
+      if (this.artyShotsLeft <= 0) {
+        this.artyShotsLeft = 0;
+        this.secondaryReloadLeft = 10.0; // Рівно 10.0 секунд перезарядки барабану на 2 снаряди
+        this.artyInterShotCooldown = 0;
+      } else {
+        this.artyInterShotCooldown = 0.65; // Пауза між 1 і 2 пострілом
+        this.secondaryReloadLeft = 10.0;
+      }
       this.playerRearRecoil = 1.0;
+      this.screenShakeIntensity = 0.55;
     } else {
       if (this.primaryReloadLeft > 0) return;
       this.primaryReloadLeft = weapon.reloadSec;
       this.playerFrontRecoil = 1.0;
     }
 
-    const activeMuzzle = isSlot2 && this.playerRig.rearMuzzle ? this.playerRig.rearMuzzle : this.playerRig.frontMuzzle;
-    const activeGunPivot = isSlot2 && this.playerRig.rearGunPivot ? this.playerRig.rearGunPivot : this.playerRig.frontGunPivot;
+    const activeMuzzle = (isSlot2 && this.playerRig.rearMuzzle) ? this.playerRig.rearMuzzle : this.playerRig.frontMuzzle;
+    const activeGunPivot = (isSlot2 && this.playerRig.rearGunPivot) ? this.playerRig.rearGunPivot : this.playerRig.frontGunPivot;
 
     const muzzlePos = new THREE.Vector3();
     activeMuzzle.getWorldPosition(muzzlePos);
@@ -1354,7 +1480,69 @@ export class TankGame3D {
       .applyQuaternion(activeGunPivot.getWorldQuaternion(new THREE.Quaternion()))
       .normalize();
 
-    // Dispersion
+    // Damage multiplier from Damage Boost pickup
+    const damageMult = this.damageBoostTimer > 0 ? 1.5 : 1.0;
+    const damage = Math.round(weapon.damage * damageMult);
+
+    if (isSlot2) {
+      // 🛰️ Артилерійська стрільба з балістичною дугою у вказану точку карти
+      let target3D: THREE.Vector3;
+      if (this.wasSniper) {
+        target3D = new THREE.Vector3(
+          this.artyAimPos.x,
+          this.arena.getHeightAt(this.artyAimPos.x, this.artyAimPos.y),
+          this.artyAimPos.y
+        );
+      } else {
+        target3D = muzzlePos.clone().addScaledVector(barrelDir, this.aimDistanceMeters);
+        target3D.y = this.arena.getHeightAt(target3D.x, target3D.z);
+      }
+
+      if (weapon.dispersionDeg > 0) {
+        const spread = (Math.random() - 0.5) * 1.6;
+        target3D.x += spread;
+        target3D.z += (Math.random() - 0.5) * 1.6;
+      }
+
+      const flightTime = 1.15;
+      const g = 48.0;
+      const dx = target3D.x - muzzlePos.x;
+      const dy = target3D.y - muzzlePos.y;
+      const dz = target3D.z - muzzlePos.z;
+      const vel = new THREE.Vector3(
+        dx / flightTime,
+        (dy + 0.5 * g * flightTime * flightTime) / flightTime,
+        dz / flightTime
+      );
+
+      // Спалах та звук артилерії
+      this.battleParticles.spawnMuzzleFlash(muzzlePos, vel.clone().normalize(), 'mini_artillery');
+      this.audio.playShoot('mini_artillery');
+
+      const mesh = createProjectileMesh('mini_artillery', false);
+      mesh.position.copy(muzzlePos);
+      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), vel.clone().normalize());
+      this.battleScene.add(mesh);
+
+      this.projectiles.push({
+        mesh,
+        pos: muzzlePos.clone(),
+        vel,
+        team: 'allies',
+        fromPlayer: true,
+        damage,
+        style: 'mini_artillery',
+        aoeRadius: weapon.aoeRadius,
+        chainCount: weapon.chainCount ?? 0,
+        chainRange: weapon.chainRange ?? 0,
+        gravity: g,
+        life: 0,
+        maxLife: 3.5
+      });
+      return;
+    }
+
+    // Для звичайної прямої наводки (слот 1)
     if (weapon.dispersionDeg > 0) {
       const dispRad = THREE.MathUtils.degToRad(weapon.dispersionDeg);
       barrelDir.x += (Math.random() - 0.5) * dispRad;
@@ -1365,10 +1553,6 @@ export class TankGame3D {
     // Muzzle flash VFX & Sound
     this.battleParticles.spawnMuzzleFlash(muzzlePos, barrelDir, weapon.projectileStyle);
     this.audio.playShoot(weapon.projectileStyle);
-
-    // Damage multiplier from Damage Boost pickup
-    const damageMult = this.damageBoostTimer > 0 ? 1.5 : 1.0;
-    const damage = Math.round(weapon.damage * damageMult);
 
     // Create Projectile Entity
     const mesh = createProjectileMesh(weapon.projectileStyle, false);
@@ -2547,6 +2731,9 @@ export class TankGame3D {
       repairCooldownLeft: Number(this.repairCooldownLeft.toFixed(1)),
       repairCooldownTotal: 18.0,
       isSniper: snap.isSniper,
+      isArtilleryMode: this.activeWeaponSlot === 2 && snap.isSniper,
+      artyShotsLeft: this.artyShotsLeft,
+      artyShotsMax: this.artyShotsMax,
       sniperZoom: snap.sniperZoom,
       aimDistanceMeters: this.aimDistanceMeters,
       targetEnemyName: this.targetEnemyName,
@@ -2607,8 +2794,11 @@ export class TankGame3D {
       const enemy3D = new THREE.Vector3(enemy.x, enemy.groundY + enemy.rig.height + 0.45, enemy.z);
       const toEnemy = enemy3D.clone().sub(camPos);
 
-      // Discard enemies behind camera or too far (> 110m)
-      if (toEnemy.dot(this.cameraLookDir) <= 1.0 || toEnemy.length() > 110) {
+      const isArtilleryMode = this.activeWeaponSlot === 2 && this.wasSniper;
+      const maxDist = isArtilleryMode ? 180 : 110;
+
+      // Discard enemies behind camera or too far
+      if (toEnemy.dot(this.cameraLookDir) <= 1.0 || toEnemy.length() > maxDist) {
         continue;
       }
 
@@ -2722,5 +2912,83 @@ export class TankGame3D {
       this.battleScene.remove(this.arenaLights);
       this.arenaLights = null;
     }
+
+    if (this.artyReticleMesh) {
+      this.battleScene.remove(this.artyReticleMesh);
+      this.artyReticleMesh = null;
+    }
+  }
+
+  private createArtilleryReticleMesh(): THREE.Group {
+    const group = new THREE.Group();
+
+    // 1. Outer tactical ring
+    const outerGeo = new THREE.RingGeometry(2.3, 2.65, 36);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xef4444,
+      transparent: true,
+      opacity: 0.85,
+      side: THREE.DoubleSide
+    });
+    const outerRing = new THREE.Mesh(outerGeo, ringMat);
+    outerRing.rotation.x = -Math.PI / 2;
+    group.add(outerRing);
+
+    // 2. Inner dashed tactical ring
+    const innerGeo = new THREE.RingGeometry(1.15, 1.35, 28);
+    const innerMat = new THREE.MeshBasicMaterial({
+      color: 0x22c55e,
+      transparent: true,
+      opacity: 0.8,
+      side: THREE.DoubleSide
+    });
+    const innerRing = new THREE.Mesh(innerGeo, innerMat);
+    innerRing.rotation.x = -Math.PI / 2;
+    group.add(innerRing);
+
+    // 3. Center bullseye dot
+    const centerGeo = new THREE.CircleGeometry(0.32, 16);
+    const centerMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.9,
+      side: THREE.DoubleSide
+    });
+    const centerDot = new THREE.Mesh(centerGeo, centerMat);
+    centerDot.rotation.x = -Math.PI / 2;
+    group.add(centerDot);
+
+    // 4. Crosshair indicator ticks (4 cardinal blades)
+    const tickGeo = new THREE.PlaneGeometry(0.18, 1.2);
+    const tickMat = new THREE.MeshBasicMaterial({
+      color: 0xef4444,
+      transparent: true,
+      opacity: 0.9,
+      side: THREE.DoubleSide
+    });
+
+    const northTick = new THREE.Mesh(tickGeo, tickMat);
+    northTick.rotation.x = -Math.PI / 2;
+    northTick.position.set(0, 0, -2.1);
+    group.add(northTick);
+
+    const southTick = new THREE.Mesh(tickGeo, tickMat);
+    southTick.rotation.x = -Math.PI / 2;
+    southTick.position.set(0, 0, 2.1);
+    group.add(southTick);
+
+    const eastTick = new THREE.Mesh(tickGeo, tickMat);
+    eastTick.rotation.x = -Math.PI / 2;
+    eastTick.rotation.z = Math.PI / 2;
+    eastTick.position.set(2.1, 0, 0);
+    group.add(eastTick);
+
+    const westTick = new THREE.Mesh(tickGeo, tickMat);
+    westTick.rotation.x = -Math.PI / 2;
+    westTick.rotation.z = Math.PI / 2;
+    westTick.position.set(-2.1, 0, 0);
+    group.add(westTick);
+
+    return group;
   }
 }

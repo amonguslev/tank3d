@@ -191,6 +191,9 @@ export interface HudState {
   repairCooldownLeft: number;
   repairCooldownTotal: number;
   isSniper: boolean;
+  isArtilleryMode: boolean;
+  artyShotsLeft: number;
+  artyShotsMax: number;
   sniperZoom: number;
   aimDistanceMeters: number;
   targetEnemyName: string | null;
