@@ -96,11 +96,16 @@ function createTerrainHeightFunction(mapId: MapBiomeId): (x: number, z: number) 
       raw = Math.sin((x * 0.82 + z * 0.58) * 0.033) * 2.05;
       raw += Math.cos((x * 0.52 - z * 0.78) * 0.043) * 1.25;
       raw += Math.sin(z * 0.078) * 0.42;
-    } else {
+    } else if (mapId === 'arctic') {
       // Полярний рубіж: крижані хвилі тундри та замерзлі висоти
       raw = Math.sin(x * 0.044) * 1.7 + Math.cos(z * 0.037) * 1.4;
       raw += Math.sin((x * 0.65 - z) * 0.052) * 0.9;
       raw += Math.cos((x + z) * 0.076) * 0.32;
+    } else {
+      // Вулканічна Долина: базальтові хребти, каньйони та розломи
+      raw = Math.sin(x * 0.045) * 2.1 + Math.cos(z * 0.04) * 1.75;
+      raw += Math.sin((x * 0.7 + z * 0.7) * 0.052) * 1.05;
+      raw += Math.cos((x - z) * 0.065) * 0.45;
     }
 
     // Згладжуємо рельєф біля стартових майданчиків
@@ -176,7 +181,7 @@ function computeVertexColor(
     } else {
       targetColor.setHex(0xd97706); // Теплий бурштиновий пісок
     }
-  } else {
+  } else if (mapId === 'arctic') {
     // Полярні засніжені простори, блакитний лід та темний граніт
     if (y > 4.6 || slope > 0.28) {
       targetColor.setHex(0x334155).lerp(new THREE.Color(0x1e293b), Math.min(1, (y - 4.6) * 0.25));
@@ -186,6 +191,25 @@ function computeVertexColor(
       targetColor.setHex(0xffffff); // Сліпучий чистий сніг
     } else {
       targetColor.setHex(0xe2e8f0); // Замерзла тундра
+    }
+  } else {
+    // Вулканічна Долина: чорний базальт, попіл та розпечена магма
+    if (y < -0.2) {
+      // Гаряча магма в низинах і розломах
+      const magmaFactor = Math.min(1, Math.max(0, (-0.2 - y) * 1.4));
+      targetColor.setHex(0xdc2626).lerp(new THREE.Color(0xfbbf24), magmaFactor);
+    } else if (y > 4.2 || slope > 0.26) {
+      // Гострі темні базальтові піки з багряним відблиском
+      targetColor.setHex(0x18181b).lerp(new THREE.Color(0x450a0a), Math.min(1, (y - 4.2) * 0.35));
+    } else if (slope > 0.15) {
+      // Обгорілі схили
+      targetColor.setHex(0x292524);
+    } else if (y > 1.8) {
+      // Попелясті висоти
+      targetColor.setHex(0x3f3f46);
+    } else {
+      // Застигла лавова кора
+      targetColor.setHex(0x27272a);
     }
   }
 }
@@ -360,11 +384,11 @@ export function buildWoTMapArena(mapId: MapBiomeId): BuiltMapArena {
 
   // Матеріали для об'єктів залежно від біому
   const stoneColor =
-    mapId === 'hills' ? 0x64748b : mapId === 'desert' ? 0xb45309 : 0x475569;
+    mapId === 'hills' ? 0x64748b : mapId === 'desert' ? 0xb45309 : mapId === 'volcano' ? 0x1c1917 : 0x475569;
   const rockMaterial = new THREE.MeshStandardMaterial({
     color: stoneColor,
-    roughness: 0.92,
-    metalness: 0.05,
+    roughness: mapId === 'volcano' ? 0.75 : 0.92,
+    metalness: mapId === 'volcano' ? 0.25 : 0.05,
     flatShading: true
   });
 
@@ -520,7 +544,7 @@ export function buildWoTMapArena(mapId: MapBiomeId): BuiltMapArena {
   vegetationGroup.name = 'Vegetation';
 
   const bushColor =
-    mapId === 'hills' ? 0x2e6f28 : mapId === 'desert' ? 0x937c48 : 0x334e44;
+    mapId === 'hills' ? 0x2e6f28 : mapId === 'desert' ? 0x937c48 : mapId === 'volcano' ? 0x3f3f46 : 0x334e44;
   const bushMat = new THREE.MeshStandardMaterial({
     color: bushColor,
     roughness: 0.92,
@@ -531,11 +555,11 @@ export function buildWoTMapArena(mapId: MapBiomeId): BuiltMapArena {
   });
 
   const treeTrunkMat = new THREE.MeshStandardMaterial({
-    color: 0x4a3525,
+    color: mapId === 'volcano' ? 0x18181b : 0x4a3525,
     roughness: 0.9
   });
   const treeFoliageMat = new THREE.MeshStandardMaterial({
-    color: mapId === 'hills' ? 0x1f5e20 : mapId === 'desert' ? 0x826d3b : 0x213a30,
+    color: mapId === 'hills' ? 0x1f5e20 : mapId === 'desert' ? 0x826d3b : mapId === 'volcano' ? 0x27272a : 0x213a30,
     roughness: 0.95,
     flatShading: true
   });

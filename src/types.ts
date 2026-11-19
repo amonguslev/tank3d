@@ -2,7 +2,7 @@ export type GameModeKind = 'waves' | 'duel' | 'team_battle';
 
 export type TeamSide = 'allies' | 'enemies';
 
-export type MapBiomeId = 'hills' | 'desert' | 'arctic';
+export type MapBiomeId = 'hills' | 'desert' | 'arctic' | 'volcano';
 
 export type TankTierId = 'tier1' | 'tier2' | 'tier3' | 'tier4' | 'tier5';
 

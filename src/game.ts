@@ -214,6 +214,7 @@ export class TankGame3D {
   private artyShotsLeft = 2;
   private artyShotsMax = 2;
   private artyInterShotCooldown = 0;
+  private artyAutoReloadTimer = 0;
   private artyAimPos = new THREE.Vector2(0, 0);
   private artyReticleMesh: THREE.Group | null = null;
   private lastInputYaw = 0;
@@ -415,6 +416,7 @@ export class TankGame3D {
     // Reset Artillery Satellite status
     this.artyShotsLeft = this.artyShotsMax;
     this.artyInterShotCooldown = 0;
+    this.artyAutoReloadTimer = 0;
     this.artyAimPos.set(this.playerX, this.playerZ);
     this.lastInputYaw = spawn.yaw;
     this.lastInputPitch = -0.05;
@@ -1021,10 +1023,16 @@ export class TankGame3D {
       this.secondaryReloadLeft = Math.max(0, this.secondaryReloadLeft - dt);
       if (prevSecondary > 0 && this.secondaryReloadLeft === 0) {
         this.artyShotsLeft = this.artyShotsMax;
+        this.artyAutoReloadTimer = 0;
         this.audio.playReloadReady();
       }
     } else if (this.artyShotsLeft < this.artyShotsMax) {
-      this.artyShotsLeft = this.artyShotsMax;
+      // Якщо гравець вистрілив 1 снаряд і не зробив другий постріл протягом 10с — батарея перезаряджається
+      this.artyAutoReloadTimer = Math.max(0, this.artyAutoReloadTimer - dt);
+      if (this.artyAutoReloadTimer === 0) {
+        this.artyShotsLeft = this.artyShotsMax;
+        this.audio.playReloadReady();
+      }
     }
 
     if (this.artyInterShotCooldown > 0) {
@@ -1181,23 +1189,20 @@ export class TankGame3D {
         this.playerRig.rearTurretPivot.visible = true;
       }
 
-      this.camera.position.set(0, 94, 8);
+      const aspect = window.innerWidth / Math.max(1, window.innerHeight);
+      // Розраховуємо висоту орбітальної камери, щоб уся арена 190×190м гарантовано вміщувалась
+      const satHeight = aspect < 1 ? Math.min(240, 165 / aspect) : 165;
+      this.camera.position.set(0, satHeight, 0.001);
+      this.camera.up.set(0, 0, -1); // North (-Z) зверху екрана, South (+Z) знизу
       this.camera.lookAt(0, 0, 0);
 
-      if (Math.abs(this.camera.fov - 68) > 0.1) {
-        this.camera.fov = 68;
+      if (Math.abs(this.camera.fov - 70) > 0.1) {
+        this.camera.fov = 70;
         this.camera.updateProjectionMatrix();
       }
 
       // Керування точкою прицілу artyAimPos:
-      if (snap.pointerLocked) {
-        let dYaw = snap.cameraYaw - this.lastInputYaw;
-        let dPitch = snap.cameraPitch - this.lastInputPitch;
-        while (dYaw < -Math.PI) dYaw += Math.PI * 2;
-        while (dYaw > Math.PI) dYaw -= Math.PI * 2;
-        this.artyAimPos.x += dYaw * 40;
-        this.artyAimPos.y -= dPitch * 40;
-      } else if (snap.mouseNdc) {
+      if (snap.mouseNdc) {
         const raycaster = new THREE.Raycaster();
         raycaster.setFromCamera(new THREE.Vector2(snap.mouseNdc.x, snap.mouseNdc.y), this.camera);
         const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -1205,20 +1210,30 @@ export class TankGame3D {
         if (raycaster.ray.intersectPlane(groundPlane, intersect)) {
           this.artyAimPos.set(intersect.x, intersect.z);
         }
+      } else if (snap.pointerLocked) {
+        let dYaw = snap.cameraYaw - this.lastInputYaw;
+        let dPitch = snap.cameraPitch - this.lastInputPitch;
+        while (dYaw < -Math.PI) dYaw += Math.PI * 2;
+        while (dYaw > Math.PI) dYaw -= Math.PI * 2;
+        this.artyAimPos.x += dYaw * 50;
+        this.artyAimPos.y -= dPitch * 50;
       }
 
-      this.artyAimPos.x = Math.max(-58, Math.min(58, this.artyAimPos.x));
-      this.artyAimPos.y = Math.max(-58, Math.min(58, this.artyAimPos.y));
+      // Дозволяємо прицілювання по ВСІЙ відкритій карті 190×190 метрів!
+      const aimLimit = WORLD_HALF_SIZE - 4; // 91 метр!
+      this.artyAimPos.x = Math.max(-aimLimit, Math.min(aimLimit, this.artyAimPos.x));
+      this.artyAimPos.y = Math.max(-aimLimit, Math.min(aimLimit, this.artyAimPos.y));
 
       this.lastInputYaw = snap.cameraYaw;
       this.lastInputPitch = snap.cameraPitch;
 
       if (this.artyReticleMesh) {
         const groundY = this.arena.getHeightAt(this.artyAimPos.x, this.artyAimPos.y);
-        this.artyReticleMesh.position.set(this.artyAimPos.x, groundY + 0.12, this.artyAimPos.y);
+        this.artyReticleMesh.position.set(this.artyAimPos.x, groundY + 0.15, this.artyAimPos.y);
         this.artyReticleMesh.visible = true;
       }
     } else {
+      this.camera.up.set(0, 1, 0); // Відновлюємо нормальний вектор вгору для звичайної 3D камери
       if (this.artyReticleMesh) {
         this.artyReticleMesh.visible = false;
       }
@@ -1451,16 +1466,18 @@ export class TankGame3D {
     const weapon = (isSlot2 && this.playerStats.secondaryWeapon) ? this.playerStats.secondaryWeapon : this.playerStats.primaryWeapon;
 
     if (isSlot2) {
-      if (this.secondaryReloadLeft > 0 || this.artyInterShotCooldown > 0) return;
+      if (this.secondaryReloadLeft > 0 || this.artyInterShotCooldown > 0 || this.artyShotsLeft <= 0) return;
 
       this.artyShotsLeft--;
       if (this.artyShotsLeft <= 0) {
         this.artyShotsLeft = 0;
         this.secondaryReloadLeft = 10.0; // Рівно 10.0 секунд перезарядки барабану на 2 снаряди
         this.artyInterShotCooldown = 0;
+        this.artyAutoReloadTimer = 0;
       } else {
-        this.artyInterShotCooldown = 0.65; // Пауза між 1 і 2 пострілом
-        this.secondaryReloadLeft = 10.0;
+        this.artyInterShotCooldown = 0.5; // Пауза 0.5с між 1 і 2 пострілом
+        this.secondaryReloadLeft = 0; // Не блокуємо другий постріл!
+        this.artyAutoReloadTimer = 10.0; // Якщо 2-й постріл не зроблено, батарея перезарядиться через 10с
       }
       this.playerRearRecoil = 1.0;
       this.screenShakeIntensity = 0.55;
@@ -1499,16 +1516,17 @@ export class TankGame3D {
       }
 
       if (weapon.dispersionDeg > 0) {
-        const spread = (Math.random() - 0.5) * 1.6;
+        const spread = (Math.random() - 0.5) * 1.5;
         target3D.x += spread;
-        target3D.z += (Math.random() - 0.5) * 1.6;
+        target3D.z += (Math.random() - 0.5) * 1.5;
       }
 
-      const flightTime = 1.15;
-      const g = 48.0;
       const dx = target3D.x - muzzlePos.x;
       const dy = target3D.y - muzzlePos.y;
       const dz = target3D.z - muzzlePos.z;
+      const horizDist = Math.hypot(dx, dz);
+      const flightTime = Math.min(2.1, Math.max(0.85, horizDist * 0.009 + 0.65));
+      const g = 45.0;
       const vel = new THREE.Vector3(
         dx / flightTime,
         (dy + 0.5 * g * flightTime * flightTime) / flightTime,
@@ -2795,10 +2813,11 @@ export class TankGame3D {
       const toEnemy = enemy3D.clone().sub(camPos);
 
       const isArtilleryMode = this.activeWeaponSlot === 2 && this.wasSniper;
-      const maxDist = isArtilleryMode ? 180 : 110;
+      const maxDist = isArtilleryMode ? 320 : 110;
+      const lookDir = isArtilleryMode ? new THREE.Vector3(0, -1, 0) : this.cameraLookDir;
 
       // Discard enemies behind camera or too far
-      if (toEnemy.dot(this.cameraLookDir) <= 1.0 || toEnemy.length() > maxDist) {
+      if (toEnemy.dot(lookDir) <= 1.0 || toEnemy.length() > maxDist) {
         continue;
       }
 

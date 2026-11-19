@@ -744,6 +744,10 @@ function updateBattleHud(hud: HudState): void {
   if (slot2NameEl) {
     slot2NameEl.textContent = `${tankSpec.secondaryWeapon?.shortName ?? 'Арта'} [${hud.artyShotsLeft}/${hud.artyShotsMax}]`;
   }
+  const touchW2Span = btnTouchW2.querySelector('span');
+  if (touchW2Span) {
+    touchW2Span.textContent = `[2] Арта [${hud.artyShotsLeft}/${hud.artyShotsMax}]`;
+  }
 
   const hpPercent = Math.max(0, Math.min(100, (hud.playerHp / hud.playerMaxHp) * 100));
   playerHpTextEl.textContent = `${Math.max(0, Math.round(hud.playerHp))} / ${hud.playerMaxHp}`;
@@ -839,11 +843,14 @@ function updateBattleHud(hud: HudState): void {
     if (hud.isArtilleryMode) {
       sniperWeaponLabelEl.textContent = '🛰️ СУПУТНИКОВИЙ АРТ-ПРИЦІЛ';
 
-      if (hud.artyShotsLeft > 0) {
-        sniperReloadTextEl.textContent = `АРТА ГОТОВА [${hud.artyShotsLeft}/${hud.artyShotsMax}]`;
+      if (hud.artyShotsLeft === 2) {
+        sniperReloadTextEl.textContent = `АРТА ГОТОВА [2/2] • 2 ПОСТРІЛИ`;
+        sniperReloadFillEl.style.width = '100%';
+      } else if (hud.artyShotsLeft === 1) {
+        sniperReloadTextEl.textContent = `ДРУГИЙ ПОСТРІЛ ГОТОВИЙ [1/2]`;
         sniperReloadFillEl.style.width = '100%';
       } else {
-        sniperReloadTextEl.textContent = `ПЕРЕЗАРЯДКА ${activeReloadLeft.toFixed(1)}с`;
+        sniperReloadTextEl.textContent = `ПЕРЕЗАРЯДКА БАТАРЕЇ: ${activeReloadLeft.toFixed(1)}с`;
         const readyRatio = 1 - Math.max(0, Math.min(1, activeReloadLeft / (activeReloadTotal || 10)));
         sniperReloadFillEl.style.width = `${(readyRatio * 100).toFixed(1)}%`;
       }

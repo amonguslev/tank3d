@@ -269,6 +269,10 @@ export class InputManager {
             Math.min(0.55, this.cameraPitch - dy * sens)
           );
         }
+      } else if (e.pointerType === 'touch') {
+        if (this.isSniper && this.currentWeaponSlot === 2) {
+          updateNdc(e.clientX, e.clientY);
+        }
       }
     });
 
@@ -295,6 +299,13 @@ export class InputManager {
             e.preventDefault();
             this.toggleSniperMode();
           }
+        } else if (e.pointerType === 'touch') {
+          updateNdc(e.clientX, e.clientY);
+          if (this.isSniper && this.currentWeaponSlot === 2) {
+            // В супутниковому режимі артилерії — прямий дотик наводить і викликає постріл
+            this.touchFire = true;
+            this.fireQueued = true;
+          }
         }
       });
     }
@@ -305,6 +316,10 @@ export class InputManager {
           this.mouseFire = false;
         }
         this.isMouseDown = false;
+      } else if (e.pointerType === 'touch') {
+        if (this.isSniper && this.currentWeaponSlot === 2) {
+          this.touchFire = false;
+        }
       }
     });
 

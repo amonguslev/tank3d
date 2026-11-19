@@ -122,7 +122,7 @@ export const CAMO_SPECS: Record<TankCamoId, TankCamoSpec> = {
   }
 };
 
-export const MAP_ORDER: MapBiomeId[] = ['hills', 'desert', 'arctic'];
+export const MAP_ORDER: MapBiomeId[] = ['hills', 'desert', 'arctic', 'volcano'];
 
 export const MAP_DEFINITIONS: Record<MapBiomeId, MapDefinition> = {
   hills: {
@@ -151,6 +151,15 @@ export const MAP_DEFINITIONS: Record<MapBiomeId, MapDefinition> = {
     fogColor: 0xe0f2fe,
     groundColor: 0xf1f5f9,
     hillColor: 0x94a3b8
+  },
+  volcano: {
+    id: 'volcano',
+    name: 'Вулканічна Долина',
+    subtitle: 'Базальтові скелі, річки палаючої лави та попелясті кратери',
+    skyColor: 0x2d0f0a,
+    fogColor: 0x3d120a,
+    groundColor: 0x1c1917,
+    hillColor: 0x991b1b
   }
 };
 
