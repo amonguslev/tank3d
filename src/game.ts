@@ -568,13 +568,18 @@ export class TankGame3D {
     this.arenaLights = new THREE.Group();
     this.arenaLights.name = 'ArenaLights';
 
-    // Hemisphere Light
-    const hemi = new THREE.HemisphereLight(mapDef.skyColor, mapDef.groundColor, 0.85);
+    // Hemisphere Light (для Хіммельсдорфа: глибоке нічне небо та теплий вечірній відблиск ліхтарів)
+    const hemiSky = mapId === 'city' ? 0x2563eb : mapDef.skyColor;
+    const hemiGround = mapId === 'city' ? 0xd97706 : mapDef.groundColor;
+    const hemiIntensity = mapId === 'city' ? 0.75 : 0.85;
+    const hemi = new THREE.HemisphereLight(hemiSky, hemiGround, hemiIntensity);
     hemi.position.set(0, 50, 0);
     this.arenaLights.add(hemi);
 
-    // Sun directional light
-    const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+    // Контрастне місячне світло для міста або сонячне для денних карт
+    const dirColor = mapId === 'city' ? 0xdbeafe : 0xffffff;
+    const dirIntensity = mapId === 'city' ? 1.4 : 1.6;
+    const sun = new THREE.DirectionalLight(dirColor, dirIntensity);
     sun.position.set(50, 75, 45);
     sun.castShadow = true;
     sun.shadow.mapSize.width = 2048;

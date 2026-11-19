@@ -122,7 +122,7 @@ export const CAMO_SPECS: Record<TankCamoId, TankCamoSpec> = {
   }
 };
 
-export const MAP_ORDER: MapBiomeId[] = ['hills', 'desert', 'arctic', 'volcano'];
+export const MAP_ORDER: MapBiomeId[] = ['hills', 'desert', 'arctic', 'volcano', 'city'];
 
 export const MAP_DEFINITIONS: Record<MapBiomeId, MapDefinition> = {
   hills: {
@@ -160,6 +160,15 @@ export const MAP_DEFINITIONS: Record<MapBiomeId, MapDefinition> = {
     fogColor: 0x3d120a,
     groundColor: 0x1c1917,
     hillColor: 0x991b1b
+  },
+  city: {
+    id: 'city',
+    name: 'Хіммельсдорф',
+    subtitle: 'Бруковані проспекти, зруйновані будівлі, Замкова гора та нічні вуличні бої',
+    skyColor: 0x111827,     // Глибоке сутінкове нічне небо
+    fogColor: 0x1f2937,     // Густий вечірній міський серпанок
+    groundColor: 0x1f242d,  // Асфальт і темна бруківка
+    hillColor: 0x4b5563     // Гранітний Замковий пагорб
   }
 };
 

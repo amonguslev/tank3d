@@ -101,11 +101,24 @@ function createTerrainHeightFunction(mapId: MapBiomeId): (x: number, z: number) 
       raw = Math.sin(x * 0.044) * 1.7 + Math.cos(z * 0.037) * 1.4;
       raw += Math.sin((x * 0.65 - z) * 0.052) * 0.9;
       raw += Math.cos((x + z) * 0.076) * 0.32;
-    } else {
+    } else if (mapId === 'volcano') {
       // Вулканічна Долина: базальтові хребти, каньйони та розломи
       raw = Math.sin(x * 0.045) * 2.1 + Math.cos(z * 0.04) * 1.75;
       raw += Math.sin((x * 0.7 + z * 0.7) * 0.052) * 1.05;
       raw += Math.cos((x - z) * 0.065) * 0.45;
+    } else {
+      // Хіммельсдорф (city): Замковий пагорб на сході/північному сході (x > 22..25)
+      // до 4.5-5м заввишки, широкі тераси та рівні проспекти в центрі й на заході для перестрілок
+      raw = Math.sin(x * 0.022) * 0.28 + Math.cos(z * 0.022) * 0.24;
+      if (x > 20) {
+        const hillT = Math.min(1, (x - 20) / 42);
+        const castleRidge = 4.2 + Math.sin(z * 0.04) * 0.75;
+        raw += hillT * hillT * castleRidge;
+      }
+      if (x > 22 && z < -8) {
+        const northEastRidge = Math.min(1, ((x - 22) + (-8 - z)) / 45);
+        raw += northEastRidge * 0.95;
+      }
     }
 
     // Згладжуємо рельєф біля стартових майданчиків
@@ -151,9 +164,9 @@ function createTerrainNormalFunction(
  */
 function computeVertexColor(
   mapId: MapBiomeId,
-  _x: number,
+  x: number,
   y: number,
-  _z: number,
+  z: number,
   slope: number,
   targetColor: THREE.Color
 ): void {
@@ -192,7 +205,7 @@ function computeVertexColor(
     } else {
       targetColor.setHex(0xe2e8f0); // Замерзла тундра
     }
-  } else {
+  } else if (mapId === 'volcano') {
     // Вулканічна Долина: чорний базальт, попіл та розпечена магма
     if (y < -0.2) {
       // Гаряча магма в низинах і розломах
@@ -210,6 +223,31 @@ function computeVertexColor(
     } else {
       // Застигла лавова кора
       targetColor.setHex(0x27272a);
+    }
+  } else {
+    // Хіммельсдорф: міська бруківка, асфальтні проспекти, сквери та Замкова гора
+    if (y > 3.2 || slope > 0.22) {
+      // Гранітний камінь Замкової гори та крутих схилів
+      targetColor.setHex(0x475569).lerp(new THREE.Color(0x334155), Math.min(1, (y - 3.2) * 0.35));
+    } else {
+      // Міська сітка проспектів, площ та бульварів
+      const isRoad = Math.abs(Math.sin(x * 0.12)) < 0.25 || Math.abs(Math.sin(z * 0.12)) < 0.25;
+      const isSquare = Math.hypot(x, z) < 18;
+      const isPark = (Math.sin(x * 0.16 + 0.4) * Math.cos(z * 0.16 + 0.4)) > 0.32;
+
+      if (isRoad) {
+        // Темний асфальт
+        targetColor.setHex(0x27272a);
+      } else if (isSquare) {
+        // Центральна брукована площа
+        targetColor.setHex(0x3f3f46);
+      } else if (isPark) {
+        // Приглушена міська трава скверів та газонів
+        targetColor.setHex(0x1b4332);
+      } else {
+        // Бруковані тротуари та пішохідні провулки
+        targetColor.setHex(0x52525b);
+      }
     }
   }
 }
@@ -384,7 +422,15 @@ export function buildWoTMapArena(mapId: MapBiomeId): BuiltMapArena {
 
   // Матеріали для об'єктів залежно від біому
   const stoneColor =
-    mapId === 'hills' ? 0x64748b : mapId === 'desert' ? 0xb45309 : mapId === 'volcano' ? 0x1c1917 : 0x475569;
+    mapId === 'hills'
+      ? 0x64748b
+      : mapId === 'desert'
+        ? 0xb45309
+        : mapId === 'volcano'
+          ? 0x1c1917
+          : mapId === 'city'
+            ? 0x374151
+            : 0x475569;
   const rockMaterial = new THREE.MeshStandardMaterial({
     color: stoneColor,
     roughness: mapId === 'volcano' ? 0.75 : 0.92,
@@ -401,6 +447,36 @@ export function buildWoTMapArena(mapId: MapBiomeId): BuiltMapArena {
     roughness: 0.75
   });
 
+  // Спеціальні матеріали для вечірнього Хіммельсдорфа
+  const cityWallMat1 = new THREE.MeshStandardMaterial({
+    color: 0x4b5563, // Темно-сіра міська цегла
+    roughness: 0.88
+  });
+  const cityWallMat2 = new THREE.MeshStandardMaterial({
+    color: 0x374151, // Графітовий фасад
+    roughness: 0.82
+  });
+  const cityRoofMat = new THREE.MeshStandardMaterial({
+    color: 0x1f2937, // Темна шиферна покрівля
+    roughness: 0.7
+  });
+  const cityCorniceMat = new THREE.MeshStandardMaterial({
+    color: 0x6b7280, // Світліший карниз
+    roughness: 0.75
+  });
+  const cityWindowMat = new THREE.MeshBasicMaterial({
+    color: 0xfef08a // Тепле світло у вікнах вечірнього міста
+  });
+  const hedgehogMetalMat = new THREE.MeshStandardMaterial({
+    color: 0x1f2937, // Протитанкові загородження («їжаки»)
+    roughness: 0.45,
+    metalness: 0.8
+  });
+  const barricadeBrickMat = new THREE.MeshStandardMaterial({
+    color: 0x78350f, // Зруйнована цегляна стіна
+    roughness: 0.95
+  });
+
   const bunkerConcreteMat = new THREE.MeshStandardMaterial({
     color: 0x52525b, // Міцний залізобетон
     roughness: 0.9,
@@ -412,8 +488,17 @@ export function buildWoTMapArena(mapId: MapBiomeId): BuiltMapArena {
     // Чергуємо типи перешкод:
     // hills: 65% скелі, 35% сільські будиночки
     // desert/arctic: 60% скелі, 40% бетонні бункери/ДОТи
+    // city: 65% міські будівлі з вікнами, барикади/їжаки та скелі на Замковій горі
     let kind: 'rock' | 'building' | 'bunker';
-    if (mapId === 'hills') {
+    if (mapId === 'city') {
+      if (loc.x > 25 && idx % 2 === 0) {
+        kind = 'rock'; // Гранітні скелі на Замковому пагорбі
+      } else if (idx % 3 === 1) {
+        kind = 'bunker'; // Протитанкові барикади та їжаки
+      } else {
+        kind = 'building'; // Міські будівлі
+      }
+    } else if (mapId === 'hills') {
       kind = idx % 3 === 1 ? 'building' : 'rock';
     } else {
       kind = idx % 3 === 1 ? 'bunker' : 'rock';
@@ -442,61 +527,160 @@ export function buildWoTMapArena(mapId: MapBiomeId): BuiltMapArena {
       rockMesh.receiveShadow = true;
       obstaclesGroup.add(rockMesh);
     } else if (kind === 'building') {
-      // Сільський будиночок / руїни
       const bGroup = new THREE.Group();
       bGroup.position.set(loc.x, groundY, loc.z);
       bGroup.rotation.y = (idx * 0.7) % (Math.PI * 2);
 
-      const wallGeo = new THREE.BoxGeometry(loc.radius * 1.6, loc.height * 0.65, loc.radius * 1.4);
-      const wallMesh = new THREE.Mesh(wallGeo, houseWallMat);
-      wallMesh.position.y = (loc.height * 0.65) / 2;
-      wallMesh.castShadow = true;
-      wallMesh.receiveShadow = true;
-      bGroup.add(wallMesh);
+      if (mapId === 'city') {
+        // Міська багатоповерхова будівля Хіммельсдорфа з теплими сяючими вікнами
+        const wallMat = idx % 2 === 0 ? cityWallMat1 : cityWallMat2;
+        const bWidth = loc.radius * 1.7;
+        const bHeight = loc.height * 0.85;
+        const bDepth = loc.radius * 1.5;
 
-      const roofGeo = new THREE.ConeGeometry(loc.radius * 1.25, loc.height * 0.5, 4);
-      const roofMesh = new THREE.Mesh(roofGeo, houseRoofMat);
-      roofMesh.position.y = loc.height * 0.65 + (loc.height * 0.5) / 2;
-      roofMesh.rotation.y = Math.PI / 4;
-      roofMesh.castShadow = true;
-      bGroup.add(roofMesh);
+        const wallGeo = new THREE.BoxGeometry(bWidth, bHeight, bDepth);
+        const wallMesh = new THREE.Mesh(wallGeo, wallMat);
+        wallMesh.position.y = bHeight / 2;
+        wallMesh.castShadow = true;
+        wallMesh.receiveShadow = true;
+        bGroup.add(wallMesh);
+
+        // Карниз
+        const corniceGeo = new THREE.BoxGeometry(bWidth * 1.06, loc.height * 0.08, bDepth * 1.06);
+        const corniceMesh = new THREE.Mesh(corniceGeo, cityCorniceMat);
+        corniceMesh.position.y = bHeight;
+        corniceMesh.castShadow = true;
+        bGroup.add(corniceMesh);
+
+        // Дах
+        const roofGeo = new THREE.ConeGeometry(loc.radius * 1.25, loc.height * 0.45, 4);
+        const roofMesh = new THREE.Mesh(roofGeo, cityRoofMat);
+        roofMesh.position.y = bHeight + (loc.height * 0.45) / 2;
+        roofMesh.rotation.y = Math.PI / 4;
+        roofMesh.castShadow = true;
+        bGroup.add(roofMesh);
+
+        // Вікна, що світяться у сутінках
+        const winW = loc.radius * 0.22;
+        const winH = loc.height * 0.16;
+        const winGeo = new THREE.BoxGeometry(winW, winH, 0.08);
+
+        const xOffsets = [-bWidth * 0.28, 0, bWidth * 0.28];
+        const yOffsets = [bHeight * 0.32, bHeight * 0.68];
+
+        for (const wx of xOffsets) {
+          for (const wy of yOffsets) {
+            const winFront = new THREE.Mesh(winGeo, cityWindowMat);
+            winFront.position.set(wx, wy, bDepth / 2 + 0.04);
+            bGroup.add(winFront);
+
+            const winBack = new THREE.Mesh(winGeo, cityWindowMat);
+            winBack.position.set(wx, wy, -bDepth / 2 - 0.04);
+            bGroup.add(winBack);
+          }
+        }
+
+        const winSideGeo = new THREE.BoxGeometry(0.08, winH, winW);
+        const zOffsets = [-bDepth * 0.24, bDepth * 0.24];
+        for (const wz of zOffsets) {
+          for (const wy of yOffsets) {
+            const winRight = new THREE.Mesh(winSideGeo, cityWindowMat);
+            winRight.position.set(bWidth / 2 + 0.04, wy, wz);
+            bGroup.add(winRight);
+
+            const winLeft = new THREE.Mesh(winSideGeo, cityWindowMat);
+            winLeft.position.set(-bWidth / 2 - 0.04, wy, wz);
+            bGroup.add(winLeft);
+          }
+        }
+      } else {
+        // Сільський будиночок / руїни
+        const wallGeo = new THREE.BoxGeometry(loc.radius * 1.6, loc.height * 0.65, loc.radius * 1.4);
+        const wallMesh = new THREE.Mesh(wallGeo, houseWallMat);
+        wallMesh.position.y = (loc.height * 0.65) / 2;
+        wallMesh.castShadow = true;
+        wallMesh.receiveShadow = true;
+        bGroup.add(wallMesh);
+
+        const roofGeo = new THREE.ConeGeometry(loc.radius * 1.25, loc.height * 0.5, 4);
+        const roofMesh = new THREE.Mesh(roofGeo, houseRoofMat);
+        roofMesh.position.y = loc.height * 0.65 + (loc.height * 0.5) / 2;
+        roofMesh.rotation.y = Math.PI / 4;
+        roofMesh.castShadow = true;
+        bGroup.add(roofMesh);
+      }
 
       obstaclesGroup.add(bGroup);
     } else {
-      // Бетонний ДОТ / бункер
-      const bunkerGroup = new THREE.Group();
-      bunkerGroup.position.set(loc.x, groundY, loc.z);
-      bunkerGroup.rotation.y = (idx * 0.6) % (Math.PI * 2);
+      if (mapId === 'city') {
+        // Міська протитанкова барикада та сталеві протитанкові «їжаки»
+        const barricadeGroup = new THREE.Group();
+        barricadeGroup.position.set(loc.x, groundY, loc.z);
+        barricadeGroup.rotation.y = (idx * 0.75) % (Math.PI * 2);
 
-      const baseGeo = new THREE.CylinderGeometry(
-        loc.radius * 0.95,
-        loc.radius * 1.15,
-        loc.height * 0.75,
-        6
-      );
-      const baseMesh = new THREE.Mesh(baseGeo, bunkerConcreteMat);
-      baseMesh.position.y = (loc.height * 0.75) / 2;
-      baseMesh.castShadow = true;
-      baseMesh.receiveShadow = true;
-      bunkerGroup.add(baseMesh);
+        const wallGeo = new THREE.BoxGeometry(loc.radius * 1.7, loc.height * 0.52, loc.radius * 0.65);
+        const wallMesh = new THREE.Mesh(wallGeo, barricadeBrickMat);
+        wallMesh.position.y = (loc.height * 0.52) / 2;
+        wallMesh.castShadow = true;
+        wallMesh.receiveShadow = true;
+        barricadeGroup.add(wallMesh);
 
-      const cupolaGeo = new THREE.CylinderGeometry(
-        loc.radius * 0.45,
-        loc.radius * 0.52,
-        loc.height * 0.35,
-        8
-      );
-      const cupolaMesh = new THREE.Mesh(cupolaGeo, bunkerConcreteMat);
-      cupolaMesh.position.y = loc.height * 0.75 + (loc.height * 0.35) / 2;
-      cupolaMesh.castShadow = true;
-      bunkerGroup.add(cupolaMesh);
+        const beamGeo = new THREE.BoxGeometry(0.32, loc.height * 0.72, 0.32);
+        const beam1 = new THREE.Mesh(beamGeo, hedgehogMetalMat);
+        beam1.position.set(0, loc.height * 0.52, 0);
+        beam1.rotation.set(0.65, 0.2, 0.4);
+        beam1.castShadow = true;
+        barricadeGroup.add(beam1);
 
-      const slitGeo = new THREE.BoxGeometry(loc.radius * 0.9, loc.height * 0.12, loc.radius * 0.3);
-      const slitMesh = new THREE.Mesh(slitGeo, bunkerSlitMat);
-      slitMesh.position.set(0, loc.height * 0.5, loc.radius * 0.85);
-      bunkerGroup.add(slitMesh);
+        const beam2 = new THREE.Mesh(beamGeo, hedgehogMetalMat);
+        beam2.position.set(0, loc.height * 0.52, 0);
+        beam2.rotation.set(-0.65, 0.5, -0.3);
+        beam2.castShadow = true;
+        barricadeGroup.add(beam2);
 
-      obstaclesGroup.add(bunkerGroup);
+        const beam3 = new THREE.Mesh(beamGeo, hedgehogMetalMat);
+        beam3.position.set(0, loc.height * 0.52, 0);
+        beam3.rotation.set(0.1, -0.65, 0.8);
+        beam3.castShadow = true;
+        barricadeGroup.add(beam3);
+
+        obstaclesGroup.add(barricadeGroup);
+      } else {
+        // Бетонний ДОТ / бункер
+        const bunkerGroup = new THREE.Group();
+        bunkerGroup.position.set(loc.x, groundY, loc.z);
+        bunkerGroup.rotation.y = (idx * 0.6) % (Math.PI * 2);
+
+        const baseGeo = new THREE.CylinderGeometry(
+          loc.radius * 0.95,
+          loc.radius * 1.15,
+          loc.height * 0.75,
+          6
+        );
+        const baseMesh = new THREE.Mesh(baseGeo, bunkerConcreteMat);
+        baseMesh.position.y = (loc.height * 0.75) / 2;
+        baseMesh.castShadow = true;
+        baseMesh.receiveShadow = true;
+        bunkerGroup.add(baseMesh);
+
+        const cupolaGeo = new THREE.CylinderGeometry(
+          loc.radius * 0.45,
+          loc.radius * 0.52,
+          loc.height * 0.35,
+          8
+        );
+        const cupolaMesh = new THREE.Mesh(cupolaGeo, bunkerConcreteMat);
+        cupolaMesh.position.y = loc.height * 0.75 + (loc.height * 0.35) / 2;
+        cupolaMesh.castShadow = true;
+        bunkerGroup.add(cupolaMesh);
+
+        const slitGeo = new THREE.BoxGeometry(loc.radius * 0.9, loc.height * 0.12, loc.radius * 0.3);
+        const slitMesh = new THREE.Mesh(slitGeo, bunkerSlitMat);
+        slitMesh.position.set(0, loc.height * 0.5, loc.radius * 0.85);
+        bunkerGroup.add(slitMesh);
+
+        obstaclesGroup.add(bunkerGroup);
+      }
     }
   });
 
@@ -537,14 +721,93 @@ export function buildWoTMapArena(mapId: MapBiomeId): BuiltMapArena {
   arenaGroup.add(obstaclesGroup);
 
   // --------------------------------------------------------------------------
-  // 5.4. Пишні напівпрозорі кущі WoT та декоративні дерева
+  // 5.4. Вуличні ліхтарі Хіммельсдорфа (Street Lights)
+  // --------------------------------------------------------------------------
+  if (mapId === 'city') {
+    const streetLightsGroup = new THREE.Group();
+    streetLightsGroup.name = 'StreetLights';
+
+    const lampPoleMat = new THREE.MeshStandardMaterial({
+      color: 0x111827,
+      metalness: 0.85,
+      roughness: 0.35
+    });
+    const lampGlowMat = new THREE.MeshBasicMaterial({
+      color: 0xfef08a // Тепла бурштинова лампа, що сяє у нічному місті
+    });
+
+    const streetLightCoords: Array<{ x: number; z: number }> = [
+      // Центральний проспект (північ-південь)
+      { x: -14, z: -35 },
+      { x: 14, z: -35 },
+      { x: -14, z: -15 },
+      { x: 14, z: -15 },
+      { x: -14, z: 15 },
+      { x: 14, z: 15 },
+      { x: -14, z: 35 },
+      { x: 14, z: 35 },
+      // Поперечні бульвари (захід-схід)
+      { x: -35, z: -14 },
+      { x: -35, z: 14 },
+      { x: 35, z: -14 },
+      { x: 35, z: 14 },
+      // Центральна площа
+      { x: -8, z: 0 },
+      { x: 8, z: 0 },
+      { x: 0, z: -8 },
+      { x: 0, z: 8 },
+      // Підходи до Замкової гори
+      { x: 26, z: -30 },
+      { x: 26, z: 30 }
+    ];
+
+    for (const pos of streetLightCoords) {
+      const gy = getHeightAt(pos.x, pos.z);
+      const lightPost = new THREE.Group();
+      lightPost.position.set(pos.x, gy, pos.z);
+
+      // Стовп ліхтаря
+      const poleGeo = new THREE.CylinderGeometry(0.12, 0.22, 4.4, 8);
+      const poleMesh = new THREE.Mesh(poleGeo, lampPoleMat);
+      poleMesh.position.y = 2.2;
+      poleMesh.castShadow = true;
+      lightPost.add(poleMesh);
+
+      // Верхній декоративний кронштейн
+      const topGeo = new THREE.BoxGeometry(0.65, 0.15, 0.65);
+      const topMesh = new THREE.Mesh(topGeo, lampPoleMat);
+      topMesh.position.y = 4.4;
+      lightPost.add(topMesh);
+
+      // Лампа з теплим світлом
+      const lanternGeo = new THREE.CylinderGeometry(0.28, 0.18, 0.45, 6);
+      const lanternMesh = new THREE.Mesh(lanternGeo, lampGlowMat);
+      lanternMesh.position.y = 4.15;
+      lightPost.add(lanternMesh);
+
+      streetLightsGroup.add(lightPost);
+    }
+
+    arenaGroup.add(streetLightsGroup);
+  }
+
+  // --------------------------------------------------------------------------
+  // 5.5. Пишні напівпрозорі кущі WoT та декоративні дерева
   // --------------------------------------------------------------------------
   const bushes: MapBush[] = [];
   const vegetationGroup = new THREE.Group();
   vegetationGroup.name = 'Vegetation';
 
   const bushColor =
-    mapId === 'hills' ? 0x2e6f28 : mapId === 'desert' ? 0x937c48 : mapId === 'volcano' ? 0x3f3f46 : 0x334e44;
+    mapId === 'hills'
+      ? 0x2e6f28
+      : mapId === 'desert'
+        ? 0x937c48
+        : mapId === 'volcano'
+          ? 0x3f3f46
+          : mapId === 'city'
+            ? 0x2d4a22
+            : 0x334e44;
   const bushMat = new THREE.MeshStandardMaterial({
     color: bushColor,
     roughness: 0.92,
@@ -555,11 +818,20 @@ export function buildWoTMapArena(mapId: MapBiomeId): BuiltMapArena {
   });
 
   const treeTrunkMat = new THREE.MeshStandardMaterial({
-    color: mapId === 'volcano' ? 0x18181b : 0x4a3525,
+    color: mapId === 'volcano' ? 0x18181b : mapId === 'city' ? 0x292524 : 0x4a3525,
     roughness: 0.9
   });
   const treeFoliageMat = new THREE.MeshStandardMaterial({
-    color: mapId === 'hills' ? 0x1f5e20 : mapId === 'desert' ? 0x826d3b : mapId === 'volcano' ? 0x27272a : 0x213a30,
+    color:
+      mapId === 'hills'
+        ? 0x1f5e20
+        : mapId === 'desert'
+          ? 0x826d3b
+          : mapId === 'volcano'
+            ? 0x27272a
+            : mapId === 'city'
+              ? 0x243e1d
+              : 0x213a30,
     roughness: 0.95,
     flatShading: true
   });
