@@ -102,6 +102,13 @@ interface ActiveEnemy {
   aiTimer: number;
   targetPos: THREE.Vector3;
   stuckTimer: number;
+  vx: number;
+  vz: number;
+  strafeDir: number;
+  evasionTimer: number;
+  lastHitTime: number;
+  lastAttackerIsPlayer: boolean;
+  reverseTimer: number;
 }
 
 interface ActiveProjectile {
@@ -665,9 +672,16 @@ export class TankGame3D {
       maxHp: spec.hp,
       reloadLeft: Math.random() * spec.reloadSec * 0.7,
       frontRecoil: 0,
-      aiTimer: Math.random() * 2,
+      aiTimer: Math.random() * 1.5,
       targetPos: new THREE.Vector3(this.playerX, 0, this.playerZ),
-      stuckTimer: 0
+      stuckTimer: 0,
+      vx: 0,
+      vz: 0,
+      strafeDir: Math.random() < 0.5 ? 1 : -1,
+      evasionTimer: 0,
+      lastHitTime: 0,
+      lastAttackerIsPlayer: false,
+      reverseTimer: 0
     };
 
     rig.root.rotation.y = enemy.hullYaw;
@@ -709,7 +723,14 @@ export class TankGame3D {
       frontRecoil: 0,
       aiTimer: 0,
       targetPos: new THREE.Vector3(this.playerX, 0, this.playerZ),
-      stuckTimer: 0
+      stuckTimer: 0,
+      vx: 0,
+      vz: 0,
+      strafeDir: 1,
+      evasionTimer: 0,
+      lastHitTime: 0,
+      lastAttackerIsPlayer: true,
+      reverseTimer: 0
     };
 
     this.duelOpponent = opponent;
@@ -803,7 +824,14 @@ export class TankGame3D {
         frontRecoil: 0,
         aiTimer: Math.random() * 1.2,
         targetPos: new THREE.Vector3(0, 0, 0),
-        stuckTimer: 0
+        stuckTimer: 0,
+        vx: 0,
+        vz: 0,
+        strafeDir: Math.random() < 0.5 ? 1 : -1,
+        evasionTimer: 0,
+        lastHitTime: 0,
+        lastAttackerIsPlayer: false,
+        reverseTimer: 0
       };
 
       this.activeEnemies.push(allyBot);
@@ -843,7 +871,14 @@ export class TankGame3D {
         frontRecoil: 0,
         aiTimer: Math.random() * 1.2,
         targetPos: new THREE.Vector3(0, 0, 0),
-        stuckTimer: 0
+        stuckTimer: 0,
+        vx: 0,
+        vz: 0,
+        strafeDir: Math.random() < 0.5 ? 1 : -1,
+        evasionTimer: 0,
+        lastHitTime: 0,
+        lastAttackerIsPlayer: false,
+        reverseTimer: 0
       };
 
       this.activeEnemies.push(enemyBot);
@@ -1362,26 +1397,121 @@ export class TankGame3D {
   }
 
   // ==========================================================================
-  // Enemy AI & Movement
+  // Smart Tactical Enemy & Bot AI
   // ==========================================================================
 
-  private findBotTarget(bot: ActiveEnemy): { x: number; z: number; groundY: number; dist: number } | null {
-    let best: { x: number; z: number; groundY: number; dist: number } | null = null;
+  private hasLineOfSight(x1: number, y1: number, z1: number, x2: number, y2: number, z2: number): boolean {
+    if (!this.arena) return true;
+    const dx = x2 - x1;
+    const dz = z2 - z1;
+    const dist = Math.hypot(dx, dz);
+    if (dist < 2.5) return true;
 
-    if (bot.team === 'enemies' && this.playerHp > 0) {
-      const dist = Math.hypot(this.playerX - bot.x, this.playerZ - bot.z);
-      best = { x: this.playerX, z: this.playerZ, groundY: this.playerGroundY, dist };
+    const steps = Math.min(24, Math.max(6, Math.floor(dist / 2.8)));
+    for (let i = 1; i < steps; i++) {
+      const t = i / steps;
+      const px = x1 + dx * t;
+      const pz = z1 + dz * t;
+      const py = y1 + (y2 - y1) * t;
+
+      const groundY = this.arena.getHeightAt(px, pz);
+      if (py < groundY - 0.25) {
+        return false;
+      }
+
+      for (const obs of this.arena.obstacles) {
+        if (Math.hypot(px - obs.x, pz - obs.z) < obs.radius * 0.95) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  private findBotTarget(bot: ActiveEnemy): {
+    x: number;
+    z: number;
+    groundY: number;
+    dist: number;
+    vx: number;
+    vz: number;
+    hp: number;
+    maxHp: number;
+    hasLos: boolean;
+  } | null {
+    interface Candidate {
+      x: number;
+      z: number;
+      groundY: number;
+      dist: number;
+      vx: number;
+      vz: number;
+      hp: number;
+      maxHp: number;
+      hasLos: boolean;
+      score: number;
     }
 
+    const candidates: Candidate[] = [];
+    const botEyeY = bot.groundY + bot.rig.height * 0.8;
+
+    // 1. Check Player if bot is enemy
+    if (bot.team === 'enemies' && this.playerHp > 0) {
+      const dist = Math.hypot(this.playerX - bot.x, this.playerZ - bot.z);
+      const playerSpeed = this.playerSpeedKmh / 3.6;
+      const pVx = Math.sin(this.playerHullYaw) * playerSpeed;
+      const pVz = Math.cos(this.playerHullYaw) * playerSpeed;
+      const hasLos = this.hasLineOfSight(bot.x, botEyeY, bot.z, this.playerX, this.playerGroundY + 1.2, this.playerZ);
+
+      let score = dist;
+      if (!hasLos) score += 55;
+      if (this.playerHp < this.playerMaxHp * 0.35) score -= 35; // Finish off low HP player
+      if (bot.lastAttackerIsPlayer && performance.now() / 1000 - bot.lastHitTime < 4) score -= 25; // Retaliation
+      if (Math.hypot(this.playerX, this.playerZ) <= 12) score -= 45; // Defend base
+
+      candidates.push({
+        x: this.playerX,
+        z: this.playerZ,
+        groundY: this.playerGroundY,
+        dist,
+        vx: pVx,
+        vz: pVz,
+        hp: this.playerHp,
+        maxHp: this.playerMaxHp,
+        hasLos,
+        score
+      });
+    }
+
+    // 2. Check opposing bots
     for (const other of this.activeEnemies) {
       if (other.hp <= 0 || other.team === bot.team) continue;
       const dist = Math.hypot(other.x - bot.x, other.z - bot.z);
-      if (!best || dist < best.dist) {
-        best = { x: other.x, z: other.z, groundY: other.groundY, dist };
-      }
+      const otherEyeY = other.groundY + other.rig.height * 0.8;
+      const hasLos = this.hasLineOfSight(bot.x, botEyeY, bot.z, other.x, otherEyeY, other.z);
+
+      let score = dist;
+      if (!hasLos) score += 55;
+      if (other.hp < other.maxHp * 0.35) score -= 35; // Finish off weakened bot
+      if (Math.hypot(other.x, other.z) <= 12) score -= 45; // Defend base
+
+      candidates.push({
+        x: other.x,
+        z: other.z,
+        groundY: other.groundY,
+        dist,
+        vx: other.vx,
+        vz: other.vz,
+        hp: other.hp,
+        maxHp: other.maxHp,
+        hasLos,
+        score
+      });
     }
 
-    return best;
+    if (candidates.length === 0) return null;
+    candidates.sort((a, b) => a.score - b.score);
+    return candidates[0];
   }
 
   private updateEnemies(dt: number, timeSec: number): void {
@@ -1390,83 +1520,188 @@ export class TankGame3D {
     for (const enemy of this.activeEnemies) {
       if (enemy.hp <= 0) continue;
 
-      // Update reload
+      const prevX = enemy.x;
+      const prevZ = enemy.z;
+
+      // Update reload & evasion
       if (enemy.reloadLeft > 0) {
         enemy.reloadLeft -= dt;
       }
+      if (enemy.evasionTimer > 0) {
+        enemy.evasionTimer -= dt;
+      }
 
       const target = this.findBotTarget(enemy);
+      const isLowHp = enemy.hp < enemy.maxHp * 0.28;
+      const isBossOrHeavy = enemy.spec.isBoss || enemy.spec.tierId === 'tier4' || enemy.spec.tierId === 'tier5';
+      const isLightScout = enemy.spec.tierId === 'tier1' || enemy.spec.tierId === 'tier2';
 
-      // AI Decision timer (every 1.2-2.0s)
+      // Periodic AI Decision timer (0.8-1.5s)
       enemy.aiTimer -= dt;
       if (enemy.aiTimer <= 0) {
-        enemy.aiTimer = 1.2 + Math.random() * 0.8;
+        enemy.aiTimer = 0.8 + Math.random() * 0.7;
 
-        if (this.currentMode === 'team_battle' && (!target || target.dist > 48)) {
-          // Gravitate toward central capture base (0, 0) when no enemy is nearby
+        // Base Defense Priority in Team Battle
+        const opposingSide = enemy.team === 'allies' ? 'enemies' : 'allies';
+        const baseThreatened = this.currentMode === 'team_battle' &&
+          this.captureProgress > 10 &&
+          this.captureOwnerProgressTeam === opposingSide;
+
+        if (baseThreatened && (!target || Math.hypot(target.x, target.z) > 16)) {
+          // Rush central base (0, 0) to decap!
           enemy.targetPos.set(
-            (Math.random() - 0.5) * 12,
+            (Math.random() - 0.5) * 10,
             0,
-            (Math.random() - 0.5) * 12
+            (Math.random() - 0.5) * 10
+          );
+        } else if (this.currentMode === 'team_battle' && (!target || target.dist > 55)) {
+          // Patrol toward central capture base when no combatant nearby
+          enemy.targetPos.set(
+            (Math.random() - 0.5) * 14,
+            0,
+            (Math.random() - 0.5) * 14
           );
         } else if (target) {
           const distToTarget = target.dist;
-          if (distToTarget > 32) {
-            enemy.targetPos.set(
-              target.x + (Math.random() - 0.5) * 14,
-              0,
-              target.z + (Math.random() - 0.5) * 14
-            );
-          } else if (distToTarget < 14) {
-            // Back up slightly or flank
+
+          if (isLowHp) {
+            // Tactical retreat: back away to cover / allies while keeping distance
             const awayDir = new THREE.Vector2(enemy.x - target.x, enemy.z - target.z).normalize();
             enemy.targetPos.set(
-              enemy.x + awayDir.x * 12 + (Math.random() - 0.5) * 8,
+              enemy.x + awayDir.x * 22 + (Math.random() - 0.5) * 10,
               0,
-              enemy.z + awayDir.y * 12 + (Math.random() - 0.5) * 8
+              enemy.z + awayDir.y * 22 + (Math.random() - 0.5) * 10
             );
-          } else {
-            // Circle around target
-            const angle = Math.atan2(enemy.x - target.x, enemy.z - target.z) + 0.45;
+          } else if (isLightScout) {
+            // Fast circling / flanking around target
+            const angle = Math.atan2(enemy.x - target.x, enemy.z - target.z) + 0.65 * enemy.strafeDir;
+            const orbitDist = 20 + Math.random() * 6;
             enemy.targetPos.set(
-              target.x + Math.sin(angle) * 22,
+              target.x + Math.sin(angle) * orbitDist,
               0,
-              target.z + Math.cos(angle) * 22
+              target.z + Math.cos(angle) * orbitDist
             );
+          } else if (isBossOrHeavy) {
+            // Heavy assault: push within 22-26m, maintaining front armor presence
+            if (distToTarget > 28) {
+              enemy.targetPos.set(
+                target.x + (Math.random() - 0.5) * 8,
+                0,
+                target.z + (Math.random() - 0.5) * 8
+              );
+            } else if (distToTarget < 16) {
+              const awayDir = new THREE.Vector2(enemy.x - target.x, enemy.z - target.z).normalize();
+              enemy.targetPos.set(
+                enemy.x + awayDir.x * 12,
+                0,
+                enemy.z + awayDir.y * 12
+              );
+            } else {
+              // Tactical "ромбування" hull angling
+              const angle = Math.atan2(enemy.x - target.x, enemy.z - target.z) + 0.4 * enemy.strafeDir;
+              enemy.targetPos.set(
+                target.x + Math.sin(angle) * 22,
+                0,
+                target.z + Math.cos(angle) * 22
+              );
+            }
+          } else {
+            // Standard / Medium / Sniper: maintain 28-38m line of sight
+            if (distToTarget > 36) {
+              enemy.targetPos.set(
+                target.x + (Math.random() - 0.5) * 12,
+                0,
+                target.z + (Math.random() - 0.5) * 12
+              );
+            } else if (distToTarget < 18) {
+              const awayDir = new THREE.Vector2(enemy.x - target.x, enemy.z - target.z).normalize();
+              enemy.targetPos.set(
+                enemy.x + awayDir.x * 14 + (Math.random() - 0.5) * 6,
+                0,
+                enemy.z + awayDir.y * 14 + (Math.random() - 0.5) * 6
+              );
+            } else {
+              const angle = Math.atan2(enemy.x - target.x, enemy.z - target.z) + 0.45 * enemy.strafeDir;
+              enemy.targetPos.set(
+                target.x + Math.sin(angle) * 28,
+                0,
+                target.z + Math.cos(angle) * 28
+              );
+            }
+          }
+
+          // Evasive zigzagging if under fire
+          if (enemy.evasionTimer > 0) {
+            const sideVector = new THREE.Vector2(
+              -(enemy.targetPos.z - enemy.z),
+              enemy.targetPos.x - enemy.x
+            ).normalize();
+            enemy.targetPos.x += sideVector.x * 8 * enemy.strafeDir;
+            enemy.targetPos.z += sideVector.y * 8 * enemy.strafeDir;
           }
         }
       }
 
-      // Navigate towards targetPos
-      const dx = enemy.targetPos.x - enemy.x;
-      const dz = enemy.targetPos.z - enemy.z;
-      const desiredYaw = Math.atan2(dx, dz);
-
-      let yawDiff = desiredYaw - enemy.hullYaw;
-      while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
-      while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
-
-      const turnStep = Math.sign(yawDiff) * Math.min(Math.abs(yawDiff), 2.2 * dt);
-      enemy.hullYaw += turnStep;
-
-      // Move forward if roughly facing target
-      if (Math.abs(yawDiff) < 0.85) {
+      // Handle Unstuck Reversing
+      if (enemy.reverseTimer > 0) {
+        enemy.reverseTimer -= dt;
         const fwdX = Math.sin(enemy.hullYaw);
         const fwdZ = Math.cos(enemy.hullYaw);
-        const spd = enemy.spec.speed * 0.9;
-        const nx = enemy.x + fwdX * spd * dt;
-        const nz = enemy.z + fwdZ * spd * dt;
-        const tankRadius = enemy.rig.halfWidth + 0.4;
+        const spd = enemy.spec.speed * 0.75;
+        const nx = enemy.x - fwdX * spd * dt;
+        const nz = enemy.z - fwdZ * spd * dt;
+        const tankRadius = enemy.rig.halfWidth + 0.35;
 
+        enemy.hullYaw += enemy.strafeDir * 2.2 * dt;
         if (!this.checkObstacleCollision(nx, nz, tankRadius) && !this.checkTankCollision(nx, nz, tankRadius, enemy.id)) {
           enemy.x = THREE.MathUtils.clamp(nx, -86, 86);
           enemy.z = THREE.MathUtils.clamp(nz, -86, 86);
-        } else {
-          // Change target quickly if blocked
-          enemy.aiTimer = 0.1;
-          enemy.hullYaw += (enemy.id % 2 === 0 ? 1 : -1) * 1.4 * dt;
+        }
+      } else {
+        // Navigate towards targetPos
+        const dx = enemy.targetPos.x - enemy.x;
+        const dz = enemy.targetPos.z - enemy.z;
+        const desiredYaw = Math.atan2(dx, dz);
+
+        let yawDiff = desiredYaw - enemy.hullYaw;
+        while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+        while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+
+        const turnStep = Math.sign(yawDiff) * Math.min(Math.abs(yawDiff), 2.5 * dt);
+        enemy.hullYaw += turnStep;
+
+        // Move forward if roughly facing target
+        if (Math.abs(yawDiff) < 0.95) {
+          const fwdX = Math.sin(enemy.hullYaw);
+          const fwdZ = Math.cos(enemy.hullYaw);
+          const spd = enemy.spec.speed * (enemy.evasionTimer > 0 ? 1.05 : 0.92);
+          const nx = enemy.x + fwdX * spd * dt;
+          const nz = enemy.z + fwdZ * spd * dt;
+          const tankRadius = enemy.rig.halfWidth + 0.35;
+
+          if (!this.checkObstacleCollision(nx, nz, tankRadius) && !this.checkTankCollision(nx, nz, tankRadius, enemy.id)) {
+            enemy.x = THREE.MathUtils.clamp(nx, -86, 86);
+            enemy.z = THREE.MathUtils.clamp(nz, -86, 86);
+            enemy.stuckTimer = Math.max(0, enemy.stuckTimer - dt * 2);
+          } else {
+            // Collision detected - increment stuck counter
+            enemy.stuckTimer += dt;
+            if (enemy.stuckTimer > 0.4) {
+              // Initiate smart unstuck maneuver
+              enemy.reverseTimer = 0.75 + Math.random() * 0.4;
+              enemy.stuckTimer = 0;
+              enemy.strafeDir = -enemy.strafeDir;
+              enemy.aiTimer = 0.1;
+            } else {
+              enemy.hullYaw += enemy.strafeDir * 2.0 * dt;
+            }
+          }
         }
       }
+
+      // Record actual velocity for target lead calculation
+      enemy.vx = (enemy.x - prevX) / Math.max(0.001, dt);
+      enemy.vz = (enemy.z - prevZ) / Math.max(0.001, dt);
 
       // Conformance to terrain
       enemy.groundY = this.arena.getHeightAt(enemy.x, enemy.z);
@@ -1477,9 +1712,25 @@ export class TankGame3D {
       const qSlp = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), norm);
       enemy.rig.root.quaternion.copy(qSlp.multiply(qY));
 
-      // Aim Turret & Gun at Target in Bot Hull Local Coordinates
+      // Aim Turret & Gun with Lead Prediction
       if (target) {
-        const aimTarget = new THREE.Vector3(target.x, target.groundY + 1.05, target.z);
+        const spec = TANK_SPECS[enemy.spec.tierId];
+        const projSpeed = spec.primaryWeapon.projectileSpeed;
+        const flightTime = Math.min(1.35, target.dist / Math.max(10, projSpeed));
+
+        // Predictive ballistic lead point
+        const leadX = target.x + target.vx * flightTime;
+        const leadZ = target.z + target.vz * flightTime;
+        const leadY = this.arena.getHeightAt(leadX, leadZ) + 1.05;
+
+        const muzzlePos = new THREE.Vector3();
+        enemy.rig.frontMuzzle.getWorldPosition(muzzlePos);
+        const leadLos = this.hasLineOfSight(muzzlePos.x, muzzlePos.y, muzzlePos.z, leadX, leadY, leadZ);
+
+        const aimTarget = leadLos
+          ? new THREE.Vector3(leadX, leadY, leadZ)
+          : new THREE.Vector3(target.x, target.groundY + 1.05, target.z);
+
         const localTarget = enemy.rig.hullGroup.worldToLocal(aimTarget);
         const localPivot = enemy.rig.frontTurretPivot.position;
 
@@ -1488,7 +1739,8 @@ export class TankGame3D {
         while (tDiff < -Math.PI) tDiff += Math.PI * 2;
         while (tDiff > Math.PI) tDiff -= Math.PI * 2;
 
-        enemy.rig.frontTurretPivot.rotation.y += Math.sign(tDiff) * Math.min(Math.abs(tDiff), 2.6 * dt);
+        // Snappy turret tracking
+        enemy.rig.frontTurretPivot.rotation.y += Math.sign(tDiff) * Math.min(Math.abs(tDiff), 3.2 * dt);
         enemy.turretYaw = enemy.hullYaw + enemy.rig.frontTurretPivot.rotation.y;
 
         const distXZ = Math.hypot(localTarget.x - localPivot.x, localTarget.z - localPivot.z);
@@ -1496,39 +1748,46 @@ export class TankGame3D {
         const desiredPitch = -Math.atan2(dy, Math.max(0.5, distXZ));
         const clampedPitch = THREE.MathUtils.clamp(desiredPitch, -0.42, 0.22);
         const pDiff = clampedPitch - enemy.rig.frontGunPivot.rotation.x;
-        enemy.rig.frontGunPivot.rotation.x += Math.sign(pDiff) * Math.min(Math.abs(pDiff), 2.6 * dt);
+        enemy.rig.frontGunPivot.rotation.x += Math.sign(pDiff) * Math.min(Math.abs(pDiff), 3.0 * dt);
         enemy.gunPitch = enemy.rig.frontGunPivot.rotation.x;
 
-        // Bot Firing check
-        const isAimed = Math.abs(tDiff) < 0.24 && Math.abs(pDiff) < 0.24;
+        // Smart Firing check: aimed + range + reloaded + clear line of sight
+        const isAimed = Math.abs(tDiff) < 0.22 && Math.abs(pDiff) < 0.22;
+        const canHit = target.hasLos || leadLos;
 
-        if (isAimed && target.dist < 75 && enemy.reloadLeft <= 0) {
-          this.handleEnemyFiring(enemy);
+        if (isAimed && target.dist < 78 && enemy.reloadLeft <= 0 && canHit) {
+          this.handleEnemyFiring(enemy, leadLos ? leadX : undefined, leadLos ? leadY : undefined, leadLos ? leadZ : undefined);
         }
       } else {
-        // Center turret forward if no target
+        // Smoothly center turret forward if no target
         const tDiff = -enemy.rig.frontTurretPivot.rotation.y;
-        enemy.rig.frontTurretPivot.rotation.y += Math.sign(tDiff) * Math.min(Math.abs(tDiff), 2.0 * dt);
+        enemy.rig.frontTurretPivot.rotation.y += Math.sign(tDiff) * Math.min(Math.abs(tDiff), 2.2 * dt);
         enemy.turretYaw = enemy.hullYaw + enemy.rig.frontTurretPivot.rotation.y;
       }
     }
   }
 
-  private handleEnemyFiring(enemy: ActiveEnemy): void {
-    enemy.reloadLeft = enemy.spec.reloadSec * (0.85 + Math.random() * 0.3);
+  private handleEnemyFiring(enemy: ActiveEnemy, leadX?: number, leadY?: number, leadZ?: number): void {
+    enemy.reloadLeft = enemy.spec.reloadSec * (0.88 + Math.random() * 0.24);
     enemy.frontRecoil = 1.0;
 
     const muzzle = enemy.rig.frontMuzzle;
     const muzzlePos = new THREE.Vector3();
     muzzle.getWorldPosition(muzzlePos);
 
-    const barrelDir = new THREE.Vector3(0, 0, 1)
-      .applyQuaternion(enemy.rig.frontGunPivot.getWorldQuaternion(new THREE.Quaternion()))
-      .normalize();
+    let barrelDir: THREE.Vector3;
+    if (leadX !== undefined && leadY !== undefined && leadZ !== undefined) {
+      barrelDir = new THREE.Vector3(leadX - muzzlePos.x, leadY - muzzlePos.y, leadZ - muzzlePos.z).normalize();
+    } else {
+      barrelDir = new THREE.Vector3(0, 0, 1)
+        .applyQuaternion(enemy.rig.frontGunPivot.getWorldQuaternion(new THREE.Quaternion()))
+        .normalize();
+    }
 
-    // Slight AI dispersion
-    barrelDir.x += (Math.random() - 0.5) * 0.05;
-    barrelDir.y += (Math.random() - 0.5) * 0.04;
+    // Precise yet natural dispersion
+    const disp = 0.022;
+    barrelDir.x += (Math.random() - 0.5) * disp;
+    barrelDir.y += (Math.random() - 0.5) * (disp * 0.7);
     barrelDir.normalize();
 
     const spec = TANK_SPECS[enemy.spec.tierId];
@@ -1542,7 +1801,7 @@ export class TankGame3D {
     mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), barrelDir);
     this.battleScene.add(mesh);
 
-    const vel = barrelDir.clone().multiplyScalar(spec.primaryWeapon.projectileSpeed * 0.9);
+    const vel = barrelDir.clone().multiplyScalar(spec.primaryWeapon.projectileSpeed * 0.95);
 
     this.projectiles.push({
       mesh,
@@ -1737,6 +1996,14 @@ export class TankGame3D {
     if (enemy.hp <= 0) return;
 
     enemy.hp = Math.max(0, enemy.hp - amount);
+    enemy.lastHitTime = performance.now() / 1000;
+    enemy.lastAttackerIsPlayer = fromPlayer;
+    enemy.evasionTimer = 2.4;
+    if (Math.random() < 0.6) {
+      enemy.strafeDir = -enemy.strafeDir;
+    }
+    enemy.aiTimer = Math.min(enemy.aiTimer, 0.2);
+
     if (fromPlayer && enemy.team === 'enemies') {
       this.totalDamageDealt += amount;
       this.score += amount * 2;
