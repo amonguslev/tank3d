@@ -23,6 +23,8 @@ export interface TankCamoSpec {
   emissiveIntensity?: number;
   headlightColor?: number;
   headlightEmissive?: number;
+  gunAccentColor?: number;
+  gunEmissiveColor?: number;
 }
 
 export type WeaponSlot = 1 | 2;

@@ -88,7 +88,7 @@ export class ParticleSystem {
   // Shared reusable materials
   private brickDebrisMat = new THREE.MeshStandardMaterial({ color: 0xc25432, roughness: 0.9 });
   private sparkMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
-  private electricSparkMat = new THREE.MeshBasicMaterial({ color: 0x67e8f9 });
+  private electricSparkMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
   private metalDebrisMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.7, roughness: 0.4 });
   private repairMat = new THREE.MeshBasicMaterial({ color: 0x22c55e });
 
@@ -100,9 +100,9 @@ export class ParticleSystem {
   ];
 
   private electricMats = [
-    new THREE.MeshBasicMaterial({ color: 0x38bdf8 }),
-    new THREE.MeshBasicMaterial({ color: 0x67e8f9 }),
-    new THREE.MeshBasicMaterial({ color: 0xa855f7 }),
+    new THREE.MeshBasicMaterial({ color: 0xef4444 }),
+    new THREE.MeshBasicMaterial({ color: 0xf87171 }),
+    new THREE.MeshBasicMaterial({ color: 0xdc2626 }),
     new THREE.MeshBasicMaterial({ color: 0xffffff })
   ];
 
@@ -166,7 +166,7 @@ export class ParticleSystem {
     if (style === 'electric') {
       // Dazzling electric plasma sphere + electric sparks
       const mat = new THREE.MeshBasicMaterial({
-        color: 0x38bdf8,
+        color: 0xef4444,
         transparent: true,
         opacity: 0.95
       });
@@ -486,7 +486,7 @@ export class ParticleSystem {
 
     const geo = new THREE.BufferGeometry().setFromPoints(points);
     const mat = new THREE.LineBasicMaterial({
-      color: 0x67e8f9,
+      color: 0xef4444,
       transparent: true,
       opacity: 1.0,
       linewidth: 2
@@ -621,7 +621,7 @@ export class ParticleSystem {
 
     // 4. Expanding shockwave ring
     const ringMat = new THREE.MeshBasicMaterial({
-      color: isElectric ? 0x38bdf8 : (scale > 1.2 ? 0xf43f5e : 0xfbbf24),
+      color: isElectric ? 0xef4444 : (scale > 1.2 ? 0xf43f5e : 0xfbbf24),
       transparent: true,
       opacity: 0.85,
       side: THREE.DoubleSide
@@ -906,7 +906,7 @@ export class ParticleSystem {
     beamGeo.rotateX(Math.PI / 2);
 
     const mat = new THREE.MeshBasicMaterial({
-      color: 0x38bdf8,
+      color: 0xef4444,
       transparent: true,
       opacity: 0.95,
       depthWrite: false

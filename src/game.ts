@@ -1751,7 +1751,7 @@ export class TankGame3D {
     const textColor = enemy.team === 'allies'
       ? '#f87171'
       : isElectric
-        ? '#38bdf8'
+        ? '#ef4444'
         : amount > 150
           ? '#f59e0b'
           : '#facc15';

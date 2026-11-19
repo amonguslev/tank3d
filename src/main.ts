@@ -398,7 +398,7 @@ function renderHangar(): void {
     ${
       spec.secondaryWeapon && computed.secondaryWeapon
         ? `
-      <div class="weapon-info-row" style="color:#38bdf8;">
+      <div class="weapon-info-row" style="color:#ef4444;">
         <span class="w-slot">[2]</span>
         <span class="w-name">${spec.secondaryWeapon.name}</span>
         <span class="w-dmg">${computed.secondaryWeapon.damage} Шкоди • ${computed.secondaryWeapon.reloadSec}с</span>

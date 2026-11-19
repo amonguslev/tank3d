@@ -204,16 +204,32 @@ export function createTankRig(
 
   const teslaActiveMats: THREE.MeshStandardMaterial[] = [];
 
+  const hasGunAccent = camo && (camo.gunAccentColor !== undefined || camo.gunEmissiveColor !== undefined);
+
+  const gunAccentMat = hasGunAccent
+    ? new THREE.MeshStandardMaterial({
+        color: camo.gunAccentColor ?? camo.trimColor ?? 0x71717a,
+        roughness: camo.roughness ?? 0.3,
+        metalness: camo.metalness ?? 0.85,
+        emissive: camo.gunEmissiveColor ?? 0x000000,
+        emissiveIntensity: camo.gunEmissiveColor !== undefined ? (camo.emissiveIntensity ?? 0.6) : 0
+      })
+    : metalTrimMat;
+
+  if (hasGunAccent && camo?.gunEmissiveColor !== undefined) {
+    teslaActiveMats.push(gunAccentMat);
+  }
+
   const energyBaseColor = (camo && (camo.emissiveColor !== undefined || camo.headlightEmissive !== undefined) && camo.trimColor !== undefined)
     ? camo.trimColor
-    : 0x38bdf8;
+    : 0xef4444;
   const energyEmissiveColor = isEnemy
     ? 0xef4444
     : isAlly
       ? 0x06b6d4
       : (camo && (camo.emissiveColor !== undefined || camo.headlightEmissive !== undefined))
         ? (camo.emissiveColor ?? camo.headlightEmissive!)
-        : 0x0284c7;
+        : 0xdc2626;
 
   // Hierarchy Roots
   const root = new THREE.Group();
@@ -266,7 +282,7 @@ export function createTankRig(
     trackWid = 0.34;
     wheelRadius = 0.28;
     wheelCount = 4;
-    turretBaseY = 0.9;
+    turretBaseY = 0.72;
     turretZ = 0.1;
   } else if (tierId === 'tier2') {
     hullLen = 3.6;
@@ -275,7 +291,7 @@ export function createTankRig(
     trackWid = 0.38;
     wheelRadius = 0.32;
     wheelCount = 5;
-    turretBaseY = 0.98;
+    turretBaseY = 0.82;
     turretZ = 0.05;
   } else if (tierId === 'tier3') {
     hullLen = 4.1;
@@ -284,7 +300,7 @@ export function createTankRig(
     trackWid = 0.44;
     wheelRadius = 0.34;
     wheelCount = 6;
-    turretBaseY = 1.08;
+    turretBaseY = 0.89;
     turretZ = 0.0;
   } else if (tierId === 'tier4') {
     hullLen = 4.3;
@@ -293,7 +309,7 @@ export function createTankRig(
     trackWid = 0.46;
     wheelRadius = 0.33;
     wheelCount = 6;
-    turretBaseY = 0.96;
+    turretBaseY = 0.85;
     turretZ = 0.2;
   } else if (tierId === 'tier5') {
     // T-5 Electro-Leviathan: Extra long chassis (6.4 length), dual turrets!
@@ -303,7 +319,7 @@ export function createTankRig(
     trackWid = 0.5;
     wheelRadius = 0.34;
     wheelCount = 9;
-    turretBaseY = 1.25;
+    turretBaseY = 0.93;
     turretZ = 1.25; // Forward turret
   }
 
@@ -532,12 +548,12 @@ export function createTankRig(
 
     // 37mm barrel (+Z forward)
     const barrelLen = 1.35;
-    const barrel = makeCylinder(0.06, 0.07, barrelLen, 12, metalTrimMat, 'z');
+    const barrel = makeCylinder(0.06, 0.07, barrelLen, 12, gunAccentMat, 'z');
     barrel.position.set(0, 0, barrelLen / 2 + 0.15);
     gunGroup.add(barrel);
 
     // Conical muzzle flash hider
-    const muzzleCone = makeCylinder(0.09, 0.06, 0.18, 10, metalTrimMat, 'z');
+    const muzzleCone = makeCylinder(0.09, 0.06, 0.18, 10, gunAccentMat, 'z');
     muzzleCone.position.set(0, 0, barrelLen + 0.22);
     gunGroup.add(muzzleCone);
 
@@ -579,7 +595,7 @@ export function createTankRig(
     gunGroup.add(mantlet);
 
     const barrelLen = 2.25;
-    const barrel = makeCylinder(0.08, 0.095, barrelLen, 14, metalTrimMat, 'z');
+    const barrel = makeCylinder(0.08, 0.095, barrelLen, 14, gunAccentMat, 'z');
     barrel.position.set(0, 0, barrelLen / 2 + 0.2);
     gunGroup.add(barrel);
 
@@ -587,6 +603,12 @@ export function createTankRig(
     const brake = makeBox(0.22, 0.16, 0.28, armorDarkMat);
     brake.position.set(0, 0, barrelLen + 0.3);
     gunGroup.add(brake);
+
+    if (hasGunAccent) {
+      const brakeAccent = makeBox(0.24, 0.18, 0.08, gunAccentMat);
+      brakeAccent.position.set(0, 0, barrelLen + 0.3);
+      gunGroup.add(brakeAccent);
+    }
 
     frontMuzzle.position.set(0, 0, barrelLen + 0.45);
     frontSniperAnchor.position.set(0, 0.48, 0.75);
@@ -628,7 +650,7 @@ export function createTankRig(
     gunGroup.add(mantlet);
 
     const barrelLen = 3.1;
-    const barrel = makeCylinder(0.1, 0.125, barrelLen, 14, metalTrimMat, 'z');
+    const barrel = makeCylinder(0.1, 0.125, barrelLen, 14, gunAccentMat, 'z');
     barrel.position.set(0, 0, barrelLen / 2 + 0.2);
     gunGroup.add(barrel);
 
@@ -637,10 +659,22 @@ export function createTankRig(
     evacuator.position.set(0, 0, barrelLen * 0.6);
     gunGroup.add(evacuator);
 
+    if (hasGunAccent) {
+      const evacAccent = makeCylinder(0.17, 0.17, 0.12, 14, gunAccentMat, 'z');
+      evacAccent.position.set(0, 0, barrelLen * 0.6);
+      gunGroup.add(evacAccent);
+    }
+
     // Double-baffle massive muzzle brake
     const brake = makeBox(0.34, 0.24, 0.42, armorDarkMat);
     brake.position.set(0, 0, barrelLen + 0.38);
     gunGroup.add(brake);
+
+    if (hasGunAccent) {
+      const brakeAccent = makeBox(0.36, 0.26, 0.1, gunAccentMat);
+      brakeAccent.position.set(0, 0, barrelLen + 0.38);
+      gunGroup.add(brakeAccent);
+    }
 
     frontMuzzle.position.set(0, 0, barrelLen + 0.6);
     frontSniperAnchor.position.set(0, 0.55, 0.9);
@@ -678,7 +712,7 @@ export function createTankRig(
     gunGroup.add(mantlet);
 
     const barrelLen = 2.1;
-    const barrel = makeCylinder(0.16, 0.19, barrelLen, 16, metalTrimMat, 'z');
+    const barrel = makeCylinder(0.16, 0.19, barrelLen, 16, gunAccentMat, 'z');
     barrel.position.set(0, 0, barrelLen / 2 + 0.25);
     gunGroup.add(barrel);
 
@@ -686,6 +720,12 @@ export function createTankRig(
     const compensator = makeCylinder(0.26, 0.26, 0.52, 16, armorDarkMat, 'z');
     compensator.position.set(0, 0, barrelLen + 0.45);
     gunGroup.add(compensator);
+
+    if (hasGunAccent) {
+      const compAccent = makeCylinder(0.275, 0.275, 0.14, 16, gunAccentMat, 'z');
+      compAccent.position.set(0, 0, barrelLen + 0.45);
+      gunGroup.add(compAccent);
+    }
 
     frontMuzzle.position.set(0, 0, barrelLen + 0.72);
     frontSniperAnchor.position.set(0, 0.5, 1.05);
@@ -741,18 +781,19 @@ export function createTankRig(
     gunGroup.add(mantlet);
 
     const barrelLen = 3.6;
-    const barrel = makeCylinder(0.14, 0.17, barrelLen, 16, metalTrimMat, 'z');
+    const barrel = makeCylinder(0.14, 0.17, barrelLen, 16, gunAccentMat, 'z');
     barrel.position.set(0, 0, barrelLen / 2 + 0.25);
     gunGroup.add(barrel);
 
     // 3 Tesla Accelerator Rings along the barrel (+Z)
+    const accelRingMat = hasGunAccent ? gunAccentMat : coilMat;
     for (let i = 1; i <= 3; i++) {
       const rz = (barrelLen * i) / 3.4;
-      const accelRing = makeCylinder(0.26, 0.26, 0.14, 14, coilMat, 'z');
+      const accelRing = makeCylinder(0.26, 0.26, 0.14, 14, accelRingMat, 'z');
       accelRing.position.set(0, 0, rz);
       gunGroup.add(accelRing);
 
-      const frame = makeBox(0.58, 0.58, 0.08, metalTrimMat);
+      const frame = makeBox(0.58, 0.58, 0.08, gunAccentMat);
       frame.position.set(0, 0, rz);
       gunGroup.add(frame);
     }
@@ -768,7 +809,7 @@ export function createTankRig(
     // B) REAR MINI-ARTILLERY TURRET ("Джміль" / Bumblebee Mini-Arty)
     rearTurretPivot = new THREE.Group();
     rearTurretPivot.name = 'RearTurretPivot';
-    rearTurretPivot.position.set(0, 1.45, -2.05);
+    rearTurretPivot.position.set(0, 1.22, -2.05);
     // Face backward by default (+Math.PI), while its local +Z is the gun direction!
     rearTurretPivot.rotation.y = Math.PI;
     root.add(rearTurretPivot);
@@ -800,7 +841,7 @@ export function createTankRig(
 
     // Mini artillery quick-fire mortar/autocannon barrel (+Z in rear turret space)
     const rearBarrelLen = 1.15;
-    const rearBarrel = makeCylinder(0.08, 0.09, rearBarrelLen, 12, metalTrimMat, 'z');
+    const rearBarrel = makeCylinder(0.08, 0.09, rearBarrelLen, 12, gunAccentMat, 'z');
     rearBarrel.position.set(0, 0, rearBarrelLen / 2 + 0.1);
     rearGunSub.add(rearBarrel);
 
@@ -808,6 +849,12 @@ export function createTankRig(
     const rearBrake = makeCylinder(0.12, 0.12, 0.18, 12, armorDarkMat, 'z');
     rearBrake.position.set(0, 0, rearBarrelLen + 0.18);
     rearGunSub.add(rearBrake);
+
+    if (hasGunAccent) {
+      const rearBrakeAccent = makeCylinder(0.13, 0.13, 0.06, 12, gunAccentMat, 'z');
+      rearBrakeAccent.position.set(0, 0, rearBarrelLen + 0.18);
+      rearGunSub.add(rearBrakeAccent);
+    }
 
     rearMuzzle = new THREE.Object3D();
     rearMuzzle.name = 'RearMuzzle';
@@ -826,8 +873,8 @@ export function createTankRig(
   const shieldRadius = Math.max(hullLen, hullWid) * 0.68;
   const shieldGeo = new THREE.IcosahedronGeometry(shieldRadius, 2);
   const shieldMat = new THREE.MeshStandardMaterial({
-    color: 0x38bdf8,
-    emissive: 0x0284c7,
+    color: 0xef4444,
+    emissive: 0xdc2626,
     emissiveIntensity: 0.8,
     transparent: true,
     opacity: 0.32,
@@ -919,7 +966,7 @@ export function createProjectileMesh(style: ProjectileStyle, isEnemy = false): T
     // Electric arcs (crossed glowing toruses)
     const arcGeo = new THREE.TorusGeometry(0.38, 0.045, 8, 20);
     const arcMat = new THREE.MeshBasicMaterial({
-      color: isEnemy ? 0xef4444 : 0x38bdf8,
+      color: 0xef4444,
       wireframe: true
     });
 
