@@ -2557,7 +2557,7 @@ export class TankGame3D {
       bossMaxHp,
       damageBoostTimer: Number(this.damageBoostTimer.toFixed(1)),
       shieldTimer: Number(this.shieldTimer.toFixed(1)),
-      testDriveActive: data.testDriveEnabled,
+      testDriveActive: false,
       worldHalfSize: WORLD_HALF_SIZE,
       cameraYaw: snap.cameraYaw,
       hullYaw: this.playerHullYaw,

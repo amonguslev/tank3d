@@ -154,7 +154,6 @@ const btnHangarMute = document.getElementById('btn-hangar-mute') as HTMLButtonEl
 const btnHangarTouch = document.getElementById('btn-hangar-touch') as HTMLButtonElement;
 const btnInstall = document.getElementById('btn-install') as HTMLButtonElement;
 
-const btnTestDrive = document.getElementById('btn-test-drive') as HTMLButtonElement;
 const mapSelectorEl = document.getElementById('map-selector') as HTMLElement;
 
 // Hangar Tank Card
@@ -303,7 +302,7 @@ function selectHangarTank(tierId: TankTierId): void {
   game.setHangarTank(tierId, storage.getSelectedCamo(tierId));
 
   const data = storage.getData();
-  if (data.unlockedTanks.includes(tierId) || data.testDriveEnabled) {
+  if (data.unlockedTanks.includes(tierId)) {
     storage.selectTank(tierId);
   }
 
@@ -315,8 +314,7 @@ function renderHangar(): void {
   const data = storage.getData();
   const spec = TANK_SPECS[inspectedTank] ?? TANK_SPECS.tier1;
   const isUnlocked = data.unlockedTanks.includes(inspectedTank);
-  const testDrive = data.testDriveEnabled;
-  const isAvailable = isUnlocked || testDrive;
+  const isAvailable = isUnlocked;
   const upgrades = data.tankUpgrades[inspectedTank] ?? { hp: 0, damage: 0, reload: 0, speed: 0 };
   const computed = computeTankStats(inspectedTank, upgrades);
 
@@ -335,21 +333,7 @@ function renderHangar(): void {
   // Touch mode button indicator
   btnHangarTouch.classList.toggle('active', input.isTouchActive());
 
-  // 2. Test Drive button state
-  btnTestDrive.classList.toggle('active', testDrive);
-  if (testDrive) {
-    btnTestDrive.innerHTML = `
-      <span class="test-drive-led"></span>
-      <span class="test-drive-text">⚡ Тест-драйв: <strong>УВІМК — усі танки I–V доступні!</strong></span>
-    `;
-  } else {
-    btnTestDrive.innerHTML = `
-      <span class="test-drive-led"></span>
-      <span class="test-drive-text">⚡ Тест-драйв: <strong>ВИМК (спробуй танк V рівня одразу!)</strong></span>
-    `;
-  }
-
-  // 3. Map Selector
+  // 2. Map Selector
   mapSelectorEl.innerHTML = '';
   for (const mapId of MAP_ORDER) {
     const mapDef = MAP_DEFINITIONS[mapId];
@@ -532,20 +516,13 @@ function renderHangar(): void {
   for (const tierId of TANK_TIER_ORDER) {
     const tSpec = TANK_SPECS[tierId];
     const tUnlocked = data.unlockedTanks.includes(tierId);
-    const tAvailable = tUnlocked || testDrive;
+    const tAvailable = tUnlocked;
     const isSelected = tierId === inspectedTank;
 
     const slot = document.createElement('div');
     slot.className = 'tank-carousel-slot' + (isSelected ? ' active' : '') + (!tAvailable ? ' locked' : '');
 
-    let statusText = '';
-    if (testDrive) {
-      statusText = '⚡ Тест-драйв';
-    } else if (tUnlocked) {
-      statusText = '✅ У гаражі';
-    } else {
-      statusText = `🔒 🪙 ${tSpec.unlockCost}`;
-    }
+    const statusText = tUnlocked ? '✅ У гаражі' : `🔒 🪙 ${tSpec.unlockCost}`;
 
     slot.innerHTML = `
       <div class="slot-top-row">
@@ -616,10 +593,10 @@ function launchBattle(mode: GameModeKind): void {
 
   const data = storage.getData();
   let tankToPlay = inspectedTank;
-  const isAvailable = data.unlockedTanks.includes(inspectedTank) || data.testDriveEnabled;
+  const isAvailable = data.unlockedTanks.includes(inspectedTank);
 
   if (!isAvailable) {
-    // If player tapped start on locked tank without test drive, use selected active tank
+    // If player tapped start on locked tank, use selected active tank
     tankToPlay = data.selectedTank;
   } else {
     storage.selectTank(inspectedTank);
@@ -634,16 +611,6 @@ function launchBattle(mode: GameModeKind): void {
 btnPlayWaves.addEventListener('click', () => launchBattle('waves'));
 btnPlayDuel.addEventListener('click', () => launchBattle('duel'));
 btnPlayTeam.addEventListener('click', () => launchBattle('team_battle'));
-
-// Test drive toggle
-btnTestDrive.addEventListener('click', () => {
-  const enabled = storage.toggleTestDrive();
-  if (enabled) {
-    storage.selectTank(inspectedTank);
-  }
-  renderHangar();
-  sound.playPowerUpSpawn();
-});
 
 // Sound mute toggle
 function toggleMute(): void {

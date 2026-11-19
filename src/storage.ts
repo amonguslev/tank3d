@@ -81,12 +81,10 @@ export class StorageManager {
           unlockedTanks.unshift('tier1');
         }
 
-        const testDriveEnabled = Boolean(parsed.testDriveEnabled);
-
         const selectedTank: TankTierId =
           parsed.selectedTank &&
           TANK_TIER_ORDER.includes(parsed.selectedTank) &&
-          (unlockedTanks.includes(parsed.selectedTank) || testDriveEnabled)
+          unlockedTanks.includes(parsed.selectedTank)
             ? parsed.selectedTank
             : 'tier1';
 
@@ -147,7 +145,7 @@ export class StorageManager {
           selectedCamo,
           tankCamos,
           selectedMap,
-          testDriveEnabled: Boolean(parsed.testDriveEnabled),
+          testDriveEnabled: false,
           bestWave: typeof parsed.bestWave === 'number' && parsed.bestWave >= 0 ? parsed.bestWave : 0,
           bestScore: typeof parsed.bestScore === 'number' && parsed.bestScore >= 0 ? parsed.bestScore : 0,
           duelWins: typeof parsed.duelWins === 'number' && parsed.duelWins >= 0 ? parsed.duelWins : 0,
@@ -255,7 +253,7 @@ export class StorageManager {
   }
 
   private ensureValidSelectedTank(): void {
-    if (!this.data.testDriveEnabled && !this.data.unlockedTanks.includes(this.data.selectedTank)) {
+    if (!this.data.unlockedTanks.includes(this.data.selectedTank)) {
       this.data.selectedTank = this.getHighestUnlockedTank();
     }
   }
@@ -298,11 +296,11 @@ export class StorageManager {
   }
 
   isTankAvailable(tierId: TankTierId): boolean {
-    return this.data.testDriveEnabled || this.data.unlockedTanks.includes(tierId);
+    return this.data.unlockedTanks.includes(tierId);
   }
 
   selectTank(tierId: TankTierId): boolean {
-    if (this.data.unlockedTanks.includes(tierId) || this.data.testDriveEnabled) {
+    if (this.data.unlockedTanks.includes(tierId)) {
       this.data.selectedTank = tierId;
       this.persist();
       return true;
@@ -392,17 +390,17 @@ export class StorageManager {
     return false;
   }
 
-  setTestDrive(enabled: boolean): void {
-    this.data.testDriveEnabled = Boolean(enabled);
+  setTestDrive(_enabled: boolean): void {
+    this.data.testDriveEnabled = false;
     this.ensureValidSelectedTank();
     this.persist();
   }
 
   toggleTestDrive(): boolean {
-    this.data.testDriveEnabled = !this.data.testDriveEnabled;
+    this.data.testDriveEnabled = false;
     this.ensureValidSelectedTank();
     this.persist();
-    return this.data.testDriveEnabled;
+    return false;
   }
 
   recordBattleResult(result: BattleSummary): void {

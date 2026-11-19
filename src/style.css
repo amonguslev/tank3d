@@ -1613,49 +1613,16 @@ body,
   cursor: pointer;
 }
 
-/* Sub-header Bar: Test-Drive & Map Selector */
+/* Sub-header Bar: Map Selector */
 .hangar-sub-bar {
   position: relative;
   z-index: 15;
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding: 8px 20px;
   pointer-events: auto;
-}
-
-.test-drive-toggle-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border-radius: 999px;
-  border: 1.5px solid var(--wot-cyan);
-  background: rgba(12, 24, 38, 0.88);
-  color: #e0f2fe;
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
-  box-shadow: 0 0 16px rgba(0, 229, 255, 0.25);
-  transition: all 0.15s ease-out;
-}
-
-.test-drive-toggle-btn:hover {
-  background: rgba(16, 36, 58, 0.95);
-  box-shadow: 0 0 24px var(--wot-cyan-glow);
-}
-
-.test-drive-led {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #64748b;
-}
-
-.test-drive-toggle-btn.active .test-drive-led {
-  background: var(--wot-cyan);
-  box-shadow: 0 0 8px var(--wot-cyan);
 }
 
 .map-selector-bar {
