@@ -192,6 +192,7 @@ export interface HudState {
   repairCooldownTotal: number;
   isSniper: boolean;
   isArtilleryMode: boolean;
+  artyZoomStep?: number;
   artyShotsLeft: number;
   artyShotsMax: number;
   artyAimX?: number;

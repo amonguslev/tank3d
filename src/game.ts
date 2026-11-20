@@ -1203,11 +1203,19 @@ export class TankGame3D {
       }
 
       const aspect = window.innerWidth / Math.max(1, window.innerHeight);
-      // Розраховуємо висоту орбітальної камери, щоб уся арена 190×190м гарантовано вміщувалась
-      const satHeight = aspect < 1 ? Math.min(240, 165 / aspect) : 165;
-      this.camera.position.set(0, satHeight, 0.001);
+      // Розраховуємо висоту орбітальної камери з урахуванням тактичного зуму артилерії
+      const fullHeight = aspect < 1 ? Math.min(240, 165 / aspect) : 165;
+      const zoomStep = snap.artyZoomStep || 1;
+      const zoomT = THREE.MathUtils.clamp((zoomStep - 1) / 3, 0, 1);
+      const satHeight = THREE.MathUtils.lerp(fullHeight, 48, zoomT);
+
+      // При наближенні зміщуємо центр огляду камери до точки прицілювання
+      const camX = this.artyAimPos.x * zoomT;
+      const camZ = this.artyAimPos.y * zoomT;
+
+      this.camera.position.set(camX, satHeight, camZ + 0.001);
       this.camera.up.set(0, 0, -1); // North (-Z) зверху екрана, South (+Z) знизу
-      this.camera.lookAt(0, 0, 0);
+      this.camera.lookAt(camX, 0, camZ);
 
       if (Math.abs(this.camera.fov - 70) > 0.1) {
         this.camera.fov = 70;
@@ -1218,16 +1226,28 @@ export class TankGame3D {
       if (!snap.pointerLocked && snap.mouseNdc) {
         const raycaster = new THREE.Raycaster();
         raycaster.setFromCamera(new THREE.Vector2(snap.mouseNdc.x, snap.mouseNdc.y), this.camera);
-        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
+        // Обчислюємо перетин променя з поверхнею з урахуванням висот рельєфу
+        let currentH = 0;
+        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -currentH);
         const intersect = new THREE.Vector3();
         if (raycaster.ray.intersectPlane(groundPlane, intersect)) {
+          // Крок 1 уточнення по пагорбах
+          currentH = this.arena.getHeightAt(intersect.x, intersect.z);
+          groundPlane.constant = -currentH;
+          if (raycaster.ray.intersectPlane(groundPlane, intersect)) {
+            // Крок 2 уточнення на крутих схилах
+            currentH = this.arena.getHeightAt(intersect.x, intersect.z);
+            groundPlane.constant = -currentH;
+            raycaster.ray.intersectPlane(groundPlane, intersect);
+          }
           this.artyAimPos.set(intersect.x, intersect.z);
         }
       } else if (snap.pointerLocked || (snap.mouseDeltaX && snap.mouseDeltaX !== 0) || (snap.mouseDeltaY && snap.mouseDeltaY !== 0)) {
         const dx = snap.mouseDeltaX ?? 0;
         const dy = snap.mouseDeltaY ?? 0;
         if (dx !== 0 || dy !== 0) {
-          const sens = 0.22;
+          const sens = 0.22 / Math.max(1, zoomStep);
           this.artyAimPos.x += dx * sens;
           this.artyAimPos.y += dy * sens;
         } else if (snap.pointerLocked) {
@@ -1235,8 +1255,8 @@ export class TankGame3D {
           let dPitch = snap.cameraPitch - this.lastInputPitch;
           while (dYaw < -Math.PI) dYaw += Math.PI * 2;
           while (dYaw > Math.PI) dYaw -= Math.PI * 2;
-          this.artyAimPos.x += dYaw * 50;
-          this.artyAimPos.y -= dPitch * 50;
+          this.artyAimPos.x += (dYaw * 50) / Math.max(1, zoomStep);
+          this.artyAimPos.y -= (dPitch * 50) / Math.max(1, zoomStep);
         }
       }
 
@@ -2801,6 +2821,7 @@ export class TankGame3D {
       repairCooldownTotal: 18.0,
       isSniper: snap.isSniper,
       isArtilleryMode: this.activeWeaponSlot === 2,
+      artyZoomStep: snap.artyZoomStep || 1,
       artyShotsLeft: this.artyShotsLeft,
       artyShotsMax: this.artyShotsMax,
       artyAimX: this.artyAimPos.x,

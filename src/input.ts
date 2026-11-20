@@ -22,6 +22,7 @@ export interface WotInputSnapshot {
   cameraPitch: number; // кут нахилу камери по вертикалі в радіанах (обмежений: -0.35 .. +0.55)
   isSniper: boolean; // чи увімкнений снайперський приціл
   sniperZoom: 2 | 4; // кратність зуму в снайперському режимі
+  artyZoomStep: number; // тактичний зум артилерії (1..4)
   firing: boolean; // чи затиснутий вогонь (ЛКМ або Пробіл або сенсорна кнопка)
   weaponSlotRequest: 1 | 2 | null; // одноразовий запит перемикання гармати (Digit1, Digit2, Q)
   repairRequest: boolean; // одноразовий запит ремкомплекту (Digit3, R, F)
@@ -52,6 +53,7 @@ export class InputManager {
   private cameraPitch = 0.18; // Vertical tilt angle (min -0.35, max +0.55)
   private isSniper = false;
   private sniperZoom: 2 | 4 = 2;
+  private artyZoomStep = 1;
 
   // Active weapon & single-shot requests
   private currentWeaponSlot: 1 | 2 = 1;
@@ -336,12 +338,22 @@ export class InputManager {
       }
     });
 
-    // Mouse wheel: WoT authentic sniper zoom in / zoom out
+    // Mouse wheel: WoT authentic sniper zoom in / zoom out / Artillery tactical zoom
     window.addEventListener(
       'wheel',
       (e) => {
         if (!this.gameplayActive) return;
         e.preventDefault();
+
+        // Арта в арт-прицілі: регулювання тактичного масштабу без виходу з режиму
+        if (this.currentWeaponSlot === 2 && this.isSniper) {
+          if (e.deltaY < 0) {
+            this.artyZoomStep = Math.min(4, this.artyZoomStep + 1);
+          } else if (e.deltaY > 0) {
+            this.artyZoomStep = Math.max(1, this.artyZoomStep - 1);
+          }
+          return;
+        }
 
         if (e.deltaY < 0) {
           // Wheel Up: enter sniper mode (x2 -> x4)
@@ -557,11 +569,15 @@ export class InputManager {
 
   private toggleSniperMode(): void {
     this.isSniper = !this.isSniper;
-    if (this.isSniper && !this.sniperZoom) {
-      this.sniperZoom = 2;
-    }
-    if (this.isSniper && this.currentWeaponSlot === 2) {
-      this.exitPointerLockSafe();
+    if (this.isSniper) {
+      if (!this.sniperZoom) {
+        this.sniperZoom = 2;
+      }
+      if (this.currentWeaponSlot === 2) {
+        this.exitPointerLockSafe();
+      } else if (this.gameplayActive) {
+        this.requestPointerLockSafe();
+      }
     }
   }
 
@@ -603,6 +619,7 @@ export class InputManager {
       cameraPitch: this.cameraPitch,
       isSniper: this.isSniper,
       sniperZoom: this.sniperZoom,
+      artyZoomStep: this.artyZoomStep,
       firing: this.isFiring(),
       weaponSlotRequest: this.weaponSlotRequest,
       repairRequest: this.repairRequest,
@@ -656,6 +673,13 @@ export class InputManager {
    * Cycles mobile touch sniper mode: 3rd person -> Zoom x2 -> Zoom x4 -> 3rd person.
    */
   toggleSniperTouch(): void {
+    if (this.currentWeaponSlot === 2) {
+      this.isSniper = !this.isSniper;
+      if (this.isSniper) {
+        this.exitPointerLockSafe();
+      }
+      return;
+    }
     if (!this.isSniper) {
       this.isSniper = true;
       this.sniperZoom = 2;
@@ -664,9 +688,6 @@ export class InputManager {
     } else {
       this.isSniper = false;
       this.sniperZoom = 2;
-    }
-    if (this.isSniper && this.currentWeaponSlot === 2) {
-      this.exitPointerLockSafe();
     }
   }
 
@@ -689,11 +710,8 @@ export class InputManager {
   requestWeaponSlot(slot: 1 | 2): void {
     this.weaponSlotRequest = slot;
     this.currentWeaponSlot = slot;
-    if (slot === 2) {
-      this.isSniper = true;
+    if (this.isSniper && slot === 2) {
       this.exitPointerLockSafe();
-    } else {
-      this.isSniper = false;
     }
   }
 
@@ -702,11 +720,8 @@ export class InputManager {
    */
   setCurrentWeaponSlot(slot: 1 | 2): void {
     this.currentWeaponSlot = slot;
-    if (slot === 2) {
-      this.isSniper = true;
+    if (this.isSniper && slot === 2) {
       this.exitPointerLockSafe();
-    } else {
-      this.isSniper = false;
     }
   }
 

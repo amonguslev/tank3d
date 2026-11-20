@@ -838,12 +838,13 @@ function updateBattleHud(hud: HudState): void {
   if (hud.isSniper) {
     arcadeReticleEl.classList.add('hidden');
     sniperOverlayEl.classList.remove('hidden');
-    sniperOverlayEl.classList.toggle('is-artillery-mode', hud.isArtilleryMode);
+    const isArtyView = hud.activeWeaponSlot === 2 || hud.isArtilleryMode;
+    sniperOverlayEl.classList.toggle('is-artillery-mode', isArtyView);
 
     sniperDistanceEl.textContent = `${Math.round(hud.aimDistanceMeters)} м`;
-    sniperZoomLabelEl.textContent = `x${hud.sniperZoom}`;
+    sniperZoomLabelEl.textContent = isArtyView ? `x${hud.artyZoomStep || 1}` : `x${hud.sniperZoom}`;
 
-    if (hud.isArtilleryMode) {
+    if (isArtyView) {
       sniperWeaponLabelEl.textContent = '🛰️ СУПУТНИКОВИЙ АРТ-ПРИЦІЛ';
 
       if (hud.artyShotsLeft === 2) {
@@ -1384,6 +1385,9 @@ if (minimapCanvas) {
   minimapCanvas.addEventListener('pointerdown', (e) => {
     if (currentHudState && (currentHudState.activeWeaponSlot === 2 || currentHudState.isArtilleryMode)) {
       e.stopPropagation();
+      if (!currentHudState.isSniper) {
+        input.toggleSniperTouch();
+      }
       handleMinimapAim(e.clientX, e.clientY);
     }
   });

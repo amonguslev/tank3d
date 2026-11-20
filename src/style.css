@@ -575,14 +575,10 @@ body,
   opacity: 0.4;
 }
 
-.sniper-overlay.is-artillery-mode .cross-center-dot {
-  background: #38bdf8;
-  box-shadow: 0 0 10px #38bdf8;
-}
-
+/* Приховуємо статичне центральне перехрестя, щоб бачити динамічний 3D-приціл на карті */
+.sniper-overlay.is-artillery-mode .sniper-crosshair,
 .sniper-overlay.is-artillery-mode .sniper-circle {
-  border-color: rgba(56, 189, 248, 0.35);
-  box-shadow: 0 0 12px rgba(56, 189, 248, 0.2);
+  display: none !important;
 }
 
 .sniper-overlay.is-artillery-mode .telemetry-label {
@@ -615,6 +611,44 @@ body,
   color: #38bdf8;
   font-weight: 900;
   text-shadow: 0 0 8px rgba(56, 189, 248, 0.75);
+}
+
+.arty-control-hint {
+  display: none;
+}
+
+.sniper-overlay.is-artillery-mode .arty-control-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 20px;
+  background: rgba(8, 20, 36, 0.9);
+  border: 1px solid rgba(56, 189, 248, 0.55);
+  border-radius: 20px;
+  color: #38bdf8;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), 0 0 12px rgba(56, 189, 248, 0.25);
+  pointer-events: none;
+  white-space: nowrap;
+  animation: artyHintPulse 2s ease-in-out infinite alternate;
+}
+
+@keyframes artyHintPulse {
+  0% {
+    border-color: rgba(56, 189, 248, 0.35);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), 0 0 8px rgba(56, 189, 248, 0.15);
+  }
+  100% {
+    border-color: rgba(56, 189, 248, 0.85);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), 0 0 18px rgba(56, 189, 248, 0.4);
+  }
 }
 
 /* ==========================================================================
