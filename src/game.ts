@@ -357,6 +357,14 @@ export class TankGame3D {
     this.hangarOrbitPitch = Math.max(-0.05, Math.min(0.68, this.hangarOrbitPitch + deltaPitchRad));
   }
 
+  setArtilleryAim(worldX: number, worldZ: number): void {
+    const aimLimit = WORLD_HALF_SIZE - 1;
+    this.artyAimPos.set(
+      Math.max(-aimLimit, Math.min(aimLimit, worldX)),
+      Math.max(-aimLimit, Math.min(aimLimit, worldZ))
+    );
+  }
+
   startBattle(mode: GameModeKind, tierId: TankTierId, mapId: MapBiomeId): void {
     this.inBattle = true;
     this.paused = false;
@@ -1207,7 +1215,7 @@ export class TankGame3D {
       }
 
       // Керування точкою прицілу artyAimPos:
-      if (snap.mouseNdc) {
+      if (!snap.pointerLocked && snap.mouseNdc) {
         const raycaster = new THREE.Raycaster();
         raycaster.setFromCamera(new THREE.Vector2(snap.mouseNdc.x, snap.mouseNdc.y), this.camera);
         const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -1215,17 +1223,25 @@ export class TankGame3D {
         if (raycaster.ray.intersectPlane(groundPlane, intersect)) {
           this.artyAimPos.set(intersect.x, intersect.z);
         }
-      } else if (snap.pointerLocked) {
-        let dYaw = snap.cameraYaw - this.lastInputYaw;
-        let dPitch = snap.cameraPitch - this.lastInputPitch;
-        while (dYaw < -Math.PI) dYaw += Math.PI * 2;
-        while (dYaw > Math.PI) dYaw -= Math.PI * 2;
-        this.artyAimPos.x += dYaw * 50;
-        this.artyAimPos.y -= dPitch * 50;
+      } else if (snap.pointerLocked || (snap.mouseDeltaX && snap.mouseDeltaX !== 0) || (snap.mouseDeltaY && snap.mouseDeltaY !== 0)) {
+        const dx = snap.mouseDeltaX ?? 0;
+        const dy = snap.mouseDeltaY ?? 0;
+        if (dx !== 0 || dy !== 0) {
+          const sens = 0.22;
+          this.artyAimPos.x += dx * sens;
+          this.artyAimPos.y += dy * sens;
+        } else if (snap.pointerLocked) {
+          let dYaw = snap.cameraYaw - this.lastInputYaw;
+          let dPitch = snap.cameraPitch - this.lastInputPitch;
+          while (dYaw < -Math.PI) dYaw += Math.PI * 2;
+          while (dYaw > Math.PI) dYaw -= Math.PI * 2;
+          this.artyAimPos.x += dYaw * 50;
+          this.artyAimPos.y -= dPitch * 50;
+        }
       }
 
-      // Дозволяємо прицілювання по ВСІЙ відкритій карті 190×190 метрів!
-      const aimLimit = WORLD_HALF_SIZE - 4; // 91 метр!
+      // Дозволяємо прицілювання по ВСІЙ відкритій карті від краю до краю (100% карти)!
+      const aimLimit = WORLD_HALF_SIZE - 1;
       this.artyAimPos.x = Math.max(-aimLimit, Math.min(aimLimit, this.artyAimPos.x));
       this.artyAimPos.y = Math.max(-aimLimit, Math.min(aimLimit, this.artyAimPos.y));
 
@@ -1516,8 +1532,38 @@ export class TankGame3D {
           this.artyAimPos.y
         );
       } else {
-        target3D = muzzlePos.clone().addScaledVector(barrelDir, this.aimDistanceMeters);
-        target3D.y = this.arena.getHeightAt(target3D.x, target3D.z);
+        // Розраховуємо точку падіння не за нахилом ствола (який обмежений),
+        // а за напрямком погляду камери cameraLookDir на поверхню землі/рельєфу на будь-яку дистанцію аж до краю карти!
+        const camPos = this.camera.position;
+        const camDir = this.cameraLookDir.clone().normalize();
+        const aimLimit = WORLD_HALF_SIZE - 1;
+
+        let targetX = this.playerX + camDir.x * 60;
+        let targetZ = this.playerZ + camDir.z * 60;
+
+        if (camDir.y < -0.01) {
+          // Промінь камери дивиться в землю/вниз
+          const t = -camPos.y / camDir.y;
+          if (t > 0) {
+            targetX = camPos.x + camDir.x * t;
+            targetZ = camPos.z + camDir.z * t;
+          }
+        } else {
+          // Погляд у горизонт або вгору — беремо далеку дистанцію погляду
+          const dist = 140;
+          targetX = this.playerX + camDir.x * dist;
+          targetZ = this.playerZ + camDir.z * dist;
+        }
+
+        // Якщо зафіксовано ворога під прицілом і дистанція валідна:
+        if (this.targetEnemyName && this.aimDistanceMeters > 0 && this.aimDistanceMeters < 180) {
+          targetX = muzzlePos.x + camDir.x * this.aimDistanceMeters;
+          targetZ = muzzlePos.z + camDir.z * this.aimDistanceMeters;
+        }
+
+        targetX = Math.max(-aimLimit, Math.min(aimLimit, targetX));
+        targetZ = Math.max(-aimLimit, Math.min(aimLimit, targetZ));
+        target3D = new THREE.Vector3(targetX, this.arena.getHeightAt(targetX, targetZ), targetZ);
       }
 
       if (weapon.dispersionDeg > 0) {
@@ -2754,9 +2800,11 @@ export class TankGame3D {
       repairCooldownLeft: Number(this.repairCooldownLeft.toFixed(1)),
       repairCooldownTotal: 18.0,
       isSniper: snap.isSniper,
-      isArtilleryMode: this.activeWeaponSlot === 2 && snap.isSniper,
+      isArtilleryMode: this.activeWeaponSlot === 2,
       artyShotsLeft: this.artyShotsLeft,
       artyShotsMax: this.artyShotsMax,
+      artyAimX: this.artyAimPos.x,
+      artyAimZ: this.artyAimPos.y,
       sniperZoom: snap.sniperZoom,
       aimDistanceMeters: this.aimDistanceMeters,
       targetEnemyName: this.targetEnemyName,

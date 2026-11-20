@@ -29,6 +29,8 @@ export interface WotInputSnapshot {
   pointerLocked: boolean; // чи захоплений курсор Pointer Lock
   touchMode: boolean; // чи активний сенсорний режим
   mouseNdc?: { x: number; y: number } | null;
+  mouseDeltaX?: number;
+  mouseDeltaY?: number;
 }
 
 export class InputManager {
@@ -42,6 +44,8 @@ export class InputManager {
   private pointerLocked = false;
   private touchDetected = false;
   private touchOverride: boolean | null = null;
+  private mouseDeltaX = 0;
+  private mouseDeltaY = 0;
 
   // World of Tanks Camera & Aim angles
   private cameraYaw = 0; // Horizontal orbit angle in radians
@@ -164,20 +168,17 @@ export class InputManager {
 
       // Weapon slot selection (1 = Main Gun, 2 = Rear Mini-Artillery, Q = Alternate)
       if (e.code === 'Digit1') {
-        this.weaponSlotRequest = 1;
-        this.currentWeaponSlot = 1;
+        this.requestWeaponSlot(1);
         return;
       }
       if (e.code === 'Digit2') {
-        this.weaponSlotRequest = 2;
-        this.currentWeaponSlot = 2;
+        this.requestWeaponSlot(2);
         return;
       }
       if (e.code === 'KeyQ') {
         if (!e.repeat) {
           const nextSlot: 1 | 2 = this.currentWeaponSlot === 1 ? 2 : 1;
-          this.weaponSlotRequest = nextSlot;
-          this.currentWeaponSlot = nextSlot;
+          this.requestWeaponSlot(nextSlot);
         }
         return;
       }
@@ -246,6 +247,8 @@ export class InputManager {
     window.addEventListener('pointermove', (e) => {
       if (e.pointerType === 'mouse' || e.pointerType === 'pen') {
         updateNdc(e.clientX, e.clientY);
+        this.mouseDeltaX += e.movementX || 0;
+        this.mouseDeltaY += e.movementY || 0;
 
         // When pointer is locked: movementX / movementY control camera angles
         if (this.pointerLocked) {
@@ -285,8 +288,11 @@ export class InputManager {
           this.lastMouseX = e.clientX;
           this.lastMouseY = e.clientY;
 
-          // Request pointer lock on click during gameplay
-          if (this.gameplayActive) {
+          // Request pointer lock on click during gameplay, EXCEPT in satellite artillery mode
+          const isSatelliteArty = this.currentWeaponSlot === 2 && this.isSniper;
+          if (isSatelliteArty) {
+            this.exitPointerLockSafe();
+          } else if (this.gameplayActive) {
             this.requestPointerLockSafe();
           }
 
@@ -383,6 +389,16 @@ export class InputManager {
       }
     } catch {
       // Safe fallback
+    }
+  }
+
+  exitPointerLockSafe(): void {
+    if (typeof document !== 'undefined' && document.pointerLockElement) {
+      try {
+        document.exitPointerLock?.();
+      } catch {
+        // Safe fallback
+      }
     }
   }
 
@@ -544,6 +560,9 @@ export class InputManager {
     if (this.isSniper && !this.sniperZoom) {
       this.sniperZoom = 2;
     }
+    if (this.isSniper && this.currentWeaponSlot === 2) {
+      this.exitPointerLockSafe();
+    }
   }
 
   private getCanvas(): HTMLCanvasElement | null {
@@ -590,7 +609,9 @@ export class InputManager {
       pauseRequest: this.pauseRequest,
       pointerLocked: this.pointerLocked,
       touchMode: this.isTouchActive(),
-      mouseNdc: this.mouseNdc ? { ...this.mouseNdc } : null
+      mouseNdc: this.mouseNdc ? { ...this.mouseNdc } : null,
+      mouseDeltaX: this.mouseDeltaX,
+      mouseDeltaY: this.mouseDeltaY
     };
 
     // Reset single-shot flags
@@ -599,6 +620,8 @@ export class InputManager {
     this.pauseRequest = false;
     this.fireQueued = false;
     this.autoAimTap = false;
+    this.mouseDeltaX = 0;
+    this.mouseDeltaY = 0;
 
     return snapshot;
   }
@@ -642,6 +665,9 @@ export class InputManager {
       this.isSniper = false;
       this.sniperZoom = 2;
     }
+    if (this.isSniper && this.currentWeaponSlot === 2) {
+      this.exitPointerLockSafe();
+    }
   }
 
   /**
@@ -663,6 +689,12 @@ export class InputManager {
   requestWeaponSlot(slot: 1 | 2): void {
     this.weaponSlotRequest = slot;
     this.currentWeaponSlot = slot;
+    if (slot === 2) {
+      this.isSniper = true;
+      this.exitPointerLockSafe();
+    } else {
+      this.isSniper = false;
+    }
   }
 
   /**
@@ -670,6 +702,12 @@ export class InputManager {
    */
   setCurrentWeaponSlot(slot: 1 | 2): void {
     this.currentWeaponSlot = slot;
+    if (slot === 2) {
+      this.isSniper = true;
+      this.exitPointerLockSafe();
+    } else {
+      this.isSniper = false;
+    }
   }
 
   /**
@@ -777,6 +815,8 @@ export class InputManager {
     this.fireQueued = false;
     this.autoAimTap = false;
     this.touchFire = false;
+    this.mouseDeltaX = 0;
+    this.mouseDeltaY = 0;
 
     this.touchThrottle = 0;
     this.touchSteer = 0;

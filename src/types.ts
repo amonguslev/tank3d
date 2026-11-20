@@ -194,6 +194,8 @@ export interface HudState {
   isArtilleryMode: boolean;
   artyShotsLeft: number;
   artyShotsMax: number;
+  artyAimX?: number;
+  artyAimZ?: number;
   sniperZoom: number;
   aimDistanceMeters: number;
   targetEnemyName: string | null;

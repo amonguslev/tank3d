@@ -204,8 +204,11 @@ const enemyPlatePool: HTMLElement[] = [];
 // Game Initialization & Callbacks
 // ============================================================================
 
+let currentHudState: HudState | null = null;
+
 const gameCallbacks: TankGameCallbacks = {
   onHudUpdate(hud: HudState) {
+    currentHudState = hud;
     updateBattleHud(hud);
   },
   onTurretAimUpdate(offset: TurretAimScreenOffset) {
@@ -881,6 +884,13 @@ function updateBattleHud(hud: HudState): void {
     }
   }
 
+  // Cursor style: crosshair in artillery satellite mode for free mouse aiming
+  if (hud.isSniper && (hud.isArtilleryMode || hud.activeWeaponSlot === 2)) {
+    canvas.style.cursor = 'crosshair';
+  } else {
+    canvas.style.cursor = 'default';
+  }
+
   // 7. Tactical WoT Minimap
   renderMinimap(hud);
 }
@@ -1152,6 +1162,48 @@ function renderMinimap(hud: HudState): void {
   ctx.stroke();
 
   ctx.restore();
+
+  // Draw Artillery Aim Reticle on Minimap when artillery is selected
+  if ((hud.isArtilleryMode || hud.activeWeaponSlot === 2) && hud.artyAimX !== undefined && hud.artyAimZ !== undefined) {
+    const ax = toMapX(hud.artyAimX);
+    const ay = toMapY(hud.artyAimZ);
+
+    ctx.save();
+    // Dashed line from player to aim target
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.45)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    ctx.lineTo(ax, ay);
+    ctx.stroke();
+
+    // Red aim circle with translucent fill
+    ctx.setLineDash([]);
+    ctx.strokeStyle = '#ef4444';
+    ctx.lineWidth = 1.5;
+    ctx.fillStyle = 'rgba(239, 68, 68, 0.2)';
+    ctx.beginPath();
+    ctx.arc(ax, ay, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Crosshair
+    ctx.beginPath();
+    ctx.moveTo(ax - 9, ay);
+    ctx.lineTo(ax + 9, ay);
+    ctx.moveTo(ax, ay - 9);
+    ctx.lineTo(ax, ay + 9);
+    ctx.stroke();
+
+    // Center dot
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath();
+    ctx.arc(ax, ay, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
 }
 
 // ============================================================================
@@ -1307,6 +1359,42 @@ window.addEventListener('keydown', (e) => {
     toggleMute();
   }
 });
+
+// Minimap click & drag targeting for Artillery
+if (minimapCanvas) {
+  const handleMinimapAim = (clientX: number, clientY: number) => {
+    const rect = minimapCanvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    // Normalizing to 168x168 coordinate space of minimap
+    const clickX = ((clientX - rect.left) / rect.width) * 168;
+    const clickY = ((clientY - rect.top) / rect.height) * 168;
+
+    const halfSize = Math.max(10, currentHudState?.worldHalfSize || 95);
+    const cx = 168 / 2;
+    const cy = 168 / 2;
+    const scale = (168 * 0.46) / halfSize;
+
+    const worldX = (clickX - cx) / scale;
+    const worldZ = (clickY - cy) / scale;
+
+    game.setArtilleryAim(worldX, worldZ);
+  };
+
+  minimapCanvas.addEventListener('pointerdown', (e) => {
+    if (currentHudState && (currentHudState.activeWeaponSlot === 2 || currentHudState.isArtilleryMode)) {
+      e.stopPropagation();
+      handleMinimapAim(e.clientX, e.clientY);
+    }
+  });
+
+  minimapCanvas.addEventListener('pointermove', (e) => {
+    if (e.buttons === 1 && currentHudState && (currentHudState.activeWeaponSlot === 2 || currentHudState.isArtilleryMode)) {
+      e.stopPropagation();
+      handleMinimapAim(e.clientX, e.clientY);
+    }
+  });
+}
 
 // Window resize
 window.addEventListener('resize', () => {
