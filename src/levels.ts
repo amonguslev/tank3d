@@ -5,7 +5,7 @@ import type { MapBiomeId, TankTierId } from './types';
 // ============================================================================
 // 1. КОНСТАНТИ МАСШТАБУ КАРТИ WORLD OF TANKS
 // ============================================================================
-export const WORLD_HALF_SIZE = 95; // Відкрита танкова арена 190×190 метрів
+export const WORLD_HALF_SIZE = 150; // Відкрита танкова арена 300×300 метрів
 
 // ============================================================================
 // 2. ІНТЕРФЕЙСИ КАРТИ, ПЕРЕШКОД ТА ХВИЛЬ
@@ -64,14 +64,14 @@ export interface EnemyWaveUnitSpec {
  * щоб забезпечити рівний майданчик для старту та комфортної їзди.
  */
 function getSpawnFlatFactor(x: number, z: number): number {
-  // Спавн гравця: (0, 52)
-  const dPlayer = Math.hypot(x - 0, z - 52);
-  const wPlayer = Math.min(1, Math.max(0, (dPlayer - 7) / 11));
+  // Спавн гравця: (0, 85)
+  const dPlayer = Math.hypot(x - 0, z - 85);
+  const wPlayer = Math.min(1, Math.max(0, (dPlayer - 8) / 14));
   const smoothPlayer = wPlayer * wPlayer * (3 - 2 * wPlayer);
 
-  // Спавн дуельного ворога: (0, -52)
-  const dDuel = Math.hypot(x - 0, z - (-52));
-  const wDuel = Math.min(1, Math.max(0, (dDuel - 7) / 11));
+  // Спавн дуельного ворога: (0, -85)
+  const dDuel = Math.hypot(x - 0, z - (-85));
+  const wDuel = Math.min(1, Math.max(0, (dDuel - 8) / 14));
   const smoothDuel = wDuel * wDuel * (3 - 2 * wDuel);
 
   return smoothPlayer * smoothDuel;
@@ -107,17 +107,17 @@ function createTerrainHeightFunction(mapId: MapBiomeId): (x: number, z: number) 
       raw += Math.sin((x * 0.7 + z * 0.7) * 0.052) * 1.05;
       raw += Math.cos((x - z) * 0.065) * 0.45;
     } else {
-      // Хіммельсдорф (city): Замковий пагорб на сході/північному сході (x > 22..25)
-      // до 4.5-5м заввишки, широкі тераси та рівні проспекти в центрі й на заході для перестрілок
+      // Хіммельсдорф (city): Замковий пагорб на сході/північному сході (x > 26..80)
+      // до 5.2м заввишки, широкі тераси та рівні проспекти в центрі й на заході для перестрілок
       raw = Math.sin(x * 0.022) * 0.28 + Math.cos(z * 0.022) * 0.24;
-      if (x > 20) {
-        const hillT = Math.min(1, (x - 20) / 42);
-        const castleRidge = 4.2 + Math.sin(z * 0.04) * 0.75;
+      if (x > 26) {
+        const hillT = Math.min(1, (x - 26) / 54);
+        const castleRidge = 4.8 + Math.sin(z * 0.035) * 0.85;
         raw += hillT * hillT * castleRidge;
       }
-      if (x > 22 && z < -8) {
-        const northEastRidge = Math.min(1, ((x - 22) + (-8 - z)) / 45);
-        raw += northEastRidge * 0.95;
+      if (x > 32 && z < -12) {
+        const northEastRidge = Math.min(1, ((x - 32) + (-12 - z)) / 55);
+        raw += northEastRidge * 1.1;
       }
     }
 
@@ -125,11 +125,12 @@ function createTerrainHeightFunction(mapId: MapBiomeId): (x: number, z: number) 
     const spawnDamping = getSpawnFlatFactor(x, z);
     let height = raw * spawnDamping;
 
-    // Скелястий підйом по периметру арени (починаючи з 82 м до краю 95 м)
+    // Скелястий підйом по периметру арени (починаючи з cliffStart = WORLD_HALF_SIZE - 18 = 132 м)
     const edgeDist = Math.max(Math.abs(x), Math.abs(z));
-    if (edgeDist > 82) {
-      const t = Math.min(1.4, (edgeDist - 82) / (WORLD_HALF_SIZE - 82));
-      height += t * t * 6.2;
+    const cliffStart = WORLD_HALF_SIZE - 18;
+    if (edgeDist > cliffStart) {
+      const t = Math.min(1.4, (edgeDist - cliffStart) / 18);
+      height += t * t * 6.5;
     }
 
     return height;
@@ -265,100 +266,138 @@ interface RawObstacleDef {
 }
 
 const BASE_OBSTACLE_LOCATIONS: Array<{ x: number; z: number; radius: number; height: number }> = [
-  // Західний фланг (укриття біля скель)
-  { x: -46, z: -32, radius: 4.2, height: 4.8 },
-  { x: -48, z: 0, radius: 4.6, height: 5.2 },
-  { x: -45, z: 32, radius: 4.0, height: 4.5 },
-  { x: -60, z: -16, radius: 3.8, height: 4.2 },
-  { x: -60, z: 18, radius: 3.8, height: 4.2 },
+  // Західний дальній фланг (розширені рубежі x: ±70..±105, z: ±40..±90)
+  { x: -98, z: -70, radius: 4.8, height: 5.4 },
+  { x: -102, z: -25, radius: 5.0, height: 5.6 },
+  { x: -100, z: 25, radius: 4.8, height: 5.4 },
+  { x: -95, z: 72, radius: 4.8, height: 5.2 },
+  { x: -80, z: -85, radius: 4.5, height: 5.0 },
+  { x: -80, z: 85, radius: 4.5, height: 5.0 },
+  { x: -74, z: -45, radius: 4.4, height: 4.8 },
+  { x: -74, z: 45, radius: 4.4, height: 4.8 },
 
-  // Східний фланг (укриття для снайперів)
-  { x: 46, z: -32, radius: 4.2, height: 4.8 },
-  { x: 48, z: 0, radius: 4.6, height: 5.2 },
-  { x: 45, z: 32, radius: 4.0, height: 4.5 },
-  { x: 60, z: -16, radius: 3.8, height: 4.2 },
-  { x: 60, z: 18, radius: 3.8, height: 4.2 },
+  // Західний середній фланг (укриття біля скель та будівель)
+  { x: -54, z: -55, radius: 4.2, height: 4.8 },
+  { x: -56, z: 0, radius: 4.6, height: 5.2 },
+  { x: -54, z: 55, radius: 4.2, height: 4.6 },
+  { x: -44, z: -28, radius: 3.8, height: 4.2 },
+  { x: -44, z: 28, radius: 3.8, height: 4.2 },
 
-  // Центральна долина та передові рубежі (безпечна відстань від баз!)
-  { x: -18, z: -20, radius: 3.6, height: 3.8 },
-  { x: 18, z: -20, radius: 3.6, height: 3.8 },
-  { x: -20, z: 18, radius: 3.6, height: 3.8 },
-  { x: 20, z: 18, radius: 3.6, height: 3.8 },
-  { x: -12, z: -2, radius: 3.2, height: 3.5 },
-  { x: 14, z: 2, radius: 3.2, height: 3.5 },
-  { x: 0, z: -24, radius: 3.8, height: 4.0 },
-  { x: 0, z: 24, radius: 3.8, height: 4.0 },
+  // Східний дальній фланг (Замкова гора / снайперські кручі x: +70..+105, z: ±40..±90)
+  { x: 98, z: -70, radius: 4.8, height: 5.4 },
+  { x: 102, z: -25, radius: 5.0, height: 5.6 },
+  { x: 100, z: 25, radius: 4.8, height: 5.4 },
+  { x: 95, z: 72, radius: 4.8, height: 5.2 },
+  { x: 80, z: -85, radius: 4.5, height: 5.0 },
+  { x: 80, z: 85, radius: 4.5, height: 5.0 },
+  { x: 74, z: -45, radius: 4.4, height: 4.8 },
+  { x: 74, z: 45, radius: 4.4, height: 4.8 },
 
-  // Проміжні пагорбні позиції
-  { x: -34, z: -46, radius: 3.9, height: 4.3 },
-  { x: 34, z: -46, radius: 3.9, height: 4.3 },
-  { x: -34, z: 46, radius: 3.9, height: 4.3 },
-  { x: 34, z: 46, radius: 3.9, height: 4.3 },
-  { x: -30, z: -10, radius: 3.5, height: 3.9 },
-  { x: 30, z: -10, radius: 3.5, height: 3.9 },
-  { x: -28, z: 30, radius: 3.5, height: 3.9 },
-  { x: 28, z: 30, radius: 3.5, height: 3.9 }
+  // Східний середній фланг (тераси та ДОТи)
+  { x: 54, z: -55, radius: 4.2, height: 4.8 },
+  { x: 56, z: 0, radius: 4.6, height: 5.2 },
+  { x: 54, z: 55, radius: 4.2, height: 4.6 },
+  { x: 44, z: -28, radius: 3.8, height: 4.2 },
+  { x: 44, z: 28, radius: 3.8, height: 4.2 },
+
+  // Центральна долина та передові рубежі (безпечна відстань від баз та захоплення)
+  { x: -24, z: -32, radius: 3.8, height: 4.0 },
+  { x: 24, z: -32, radius: 3.8, height: 4.0 },
+  { x: -24, z: 32, radius: 3.8, height: 4.0 },
+  { x: 24, z: 32, radius: 3.8, height: 4.0 },
+  { x: -20, z: -4, radius: 3.4, height: 3.6 },
+  { x: 20, z: 4, radius: 3.4, height: 3.6 },
+  { x: 0, z: -36, radius: 3.8, height: 4.0 },
+  { x: 0, z: 36, radius: 3.8, height: 4.0 },
+
+  // Захисні позиції на підступах до стартових майданчиків
+  { x: -42, z: -75, radius: 4.0, height: 4.4 },
+  { x: 42, z: -75, radius: 4.0, height: 4.4 },
+  { x: -42, z: 75, radius: 4.0, height: 4.4 },
+  { x: 42, z: 75, radius: 4.0, height: 4.4 },
+  { x: -22, z: -68, radius: 3.6, height: 4.0 },
+  { x: 22, z: -68, radius: 3.6, height: 4.0 },
+  { x: -22, z: 68, radius: 3.6, height: 4.0 },
+  { x: 22, z: 68, radius: 3.6, height: 4.0 }
 ];
 
 const RAW_BUSH_COORDS: Array<{ x: number; z: number; radius: number }> = [
-  // Засідки на передовій
-  { x: -10, z: 36, radius: 2.6 },
-  { x: 10, z: 36, radius: 2.6 },
-  { x: -10, z: -36, radius: 2.6 },
-  { x: 10, z: -36, radius: 2.6 },
-  { x: -26, z: 12, radius: 2.8 },
-  { x: 26, z: 12, radius: 2.8 },
-  { x: -26, z: -12, radius: 2.8 },
-  { x: 26, z: -12, radius: 2.8 },
-  { x: -40, z: 18, radius: 2.7 },
-  { x: 40, z: 18, radius: 2.7 },
-  { x: -40, z: -18, radius: 2.7 },
-  { x: 40, z: -18, radius: 2.7 },
-  { x: -38, z: 0, radius: 2.9 },
-  { x: 38, z: 0, radius: 2.9 },
-  { x: -16, z: 0, radius: 2.5 },
-  { x: 16, z: 0, radius: 2.5 },
-  { x: 0, z: 10, radius: 2.6 },
-  { x: 0, z: -10, radius: 2.6 },
+  // Засідки на передових рубежах
+  { x: -14, z: 46, radius: 2.8 },
+  { x: 14, z: 46, radius: 2.8 },
+  { x: -14, z: -46, radius: 2.8 },
+  { x: 14, z: -46, radius: 2.8 },
+  { x: -30, z: 20, radius: 2.9 },
+  { x: 30, z: 20, radius: 2.9 },
+  { x: -30, z: -20, radius: 2.9 },
+  { x: 30, z: -20, radius: 2.9 },
+  { x: -48, z: 22, radius: 2.8 },
+  { x: 48, z: 22, radius: 2.8 },
+  { x: -48, z: -22, radius: 2.8 },
+  { x: 48, z: -22, radius: 2.8 },
+  { x: -38, z: 0, radius: 3.0 },
+  { x: 38, z: 0, radius: 3.0 },
+  { x: -18, z: 0, radius: 2.6 },
+  { x: 18, z: 0, radius: 2.6 },
+  { x: 0, z: 20, radius: 2.7 },
+  { x: 0, z: -20, radius: 2.7 },
 
-  // Флангові лісосмуги
-  { x: -52, z: 22, radius: 3.0 },
-  { x: -52, z: -22, radius: 3.0 },
-  { x: 52, z: 22, radius: 3.0 },
-  { x: 52, z: -22, radius: 3.0 },
-  { x: -54, z: 38, radius: 2.8 },
-  { x: 54, z: 38, radius: 2.8 },
-  { x: -54, z: -38, radius: 2.8 },
-  { x: 54, z: -38, radius: 2.8 },
-  { x: -22, z: 42, radius: 2.7 },
-  { x: 22, z: 42, radius: 2.7 },
-  { x: -22, z: -42, radius: 2.7 },
-  { x: 22, z: -42, radius: 2.7 },
-  { x: -36, z: 32, radius: 2.8 },
-  { x: 36, z: 32, radius: 2.8 },
-  { x: -36, z: -32, radius: 2.8 },
-  { x: 36, z: -32, radius: 2.8 },
-  { x: -6, z: 22, radius: 2.5 },
-  { x: 6, z: 22, radius: 2.5 },
-  { x: -6, z: -22, radius: 2.5 },
-  { x: 6, z: -22, radius: 2.5 }
+  // Західні флангові лісосмуги (x: -70..-105)
+  { x: -72, z: 32, radius: 3.2 },
+  { x: -72, z: -32, radius: 3.2 },
+  { x: -88, z: 50, radius: 3.0 },
+  { x: -88, z: -50, radius: 3.0 },
+  { x: -100, z: 20, radius: 3.1 },
+  { x: -100, z: -20, radius: 3.1 },
+  { x: -75, z: 70, radius: 2.9 },
+  { x: -75, z: -70, radius: 2.9 },
+  { x: -92, z: 0, radius: 3.2 },
+
+  // Східні флангові лісосмуги (x: +70..+105)
+  { x: 72, z: 32, radius: 3.2 },
+  { x: 72, z: -32, radius: 3.2 },
+  { x: 88, z: 50, radius: 3.0 },
+  { x: 88, z: -50, radius: 3.0 },
+  { x: 100, z: 20, radius: 3.1 },
+  { x: 100, z: -20, radius: 3.1 },
+  { x: 75, z: 70, radius: 2.9 },
+  { x: 75, z: -70, radius: 2.9 },
+  { x: 92, z: 0, radius: 3.2 },
+
+  // Проміжні захисні смуги та підходи
+  { x: -58, z: 54, radius: 2.8 },
+  { x: 58, z: 54, radius: 2.8 },
+  { x: -58, z: -54, radius: 2.8 },
+  { x: 58, z: -54, radius: 2.8 },
+  { x: -34, z: 62, radius: 2.8 },
+  { x: 34, z: 62, radius: 2.8 },
+  { x: -34, z: -62, radius: 2.8 },
+  { x: 34, z: -62, radius: 2.8 },
+  { x: -10, z: 28, radius: 2.5 },
+  { x: 10, z: 28, radius: 2.5 },
+  { x: -10, z: -28, radius: 2.5 },
+  { x: 10, z: -28, radius: 2.5 }
 ];
 
 const RAW_BARREL_SPAWNS: BarrelSpawnPoint[] = [
-  { x: -20, z: -14 },
-  { x: 20, z: -14 },
-  { x: -20, z: 14 },
-  { x: 20, z: 14 },
-  { x: -32, z: 24 },
-  { x: 32, z: 24 },
   { x: -32, z: -24 },
   { x: 32, z: -24 },
-  { x: -42, z: -2 },
-  { x: 42, z: -2 },
-  { x: 0, z: 14 },
-  { x: 0, z: -14 },
-  { x: -14, z: 28 },
-  { x: 14, z: -28 }
+  { x: -32, z: 24 },
+  { x: 32, z: 24 },
+  { x: -60, z: 40 },
+  { x: 60, z: 40 },
+  { x: -60, z: -40 },
+  { x: 60, z: -40 },
+  { x: -84, z: -12 },
+  { x: 84, z: -12 },
+  { x: -84, z: 12 },
+  { x: 84, z: 12 },
+  { x: 0, z: 25 },
+  { x: 0, z: -25 },
+  { x: -24, z: 50 },
+  { x: 24, z: -50 },
+  { x: -72, z: 56 },
+  { x: 72, z: -56 }
 ];
 
 // ============================================================================
@@ -373,9 +412,9 @@ export function buildWoTMapArena(mapId: MapBiomeId): BuiltMapArena {
   const getNormalAt = createTerrainNormalFunction(getHeightAt);
 
   // --------------------------------------------------------------------------
-  // 5.1. Рельєфна сітка землі PlaneGeometry(220, 220, 110, 110)
+  // 5.1. Рельєфна сітка землі PlaneGeometry(350, 350, 140, 140)
   // --------------------------------------------------------------------------
-  const terrainGeo = new THREE.PlaneGeometry(220, 220, 110, 110);
+  const terrainGeo = new THREE.PlaneGeometry(350, 350, 140, 140);
   terrainGeo.rotateX(-Math.PI / 2); // Повертаємо у площину XZ (+Y вгору)
 
   const posAttr = terrainGeo.attributes.position;
@@ -695,7 +734,7 @@ export function buildWoTMapArena(mapId: MapBiomeId): BuiltMapArena {
   const perimeterGroup = new THREE.Group();
   perimeterGroup.name = 'PerimeterCliffs';
 
-  const edgeCount = 18;
+  const edgeCount = 28;
   for (let i = 0; i < edgeCount; i++) {
     const fraction = (i / edgeCount) * 2 - 1; // -1..1
     const pos = fraction * (WORLD_HALF_SIZE - 4);
@@ -738,27 +777,37 @@ export function buildWoTMapArena(mapId: MapBiomeId): BuiltMapArena {
 
     const streetLightCoords: Array<{ x: number; z: number }> = [
       // Центральний проспект (північ-південь)
-      { x: -14, z: -35 },
-      { x: 14, z: -35 },
-      { x: -14, z: -15 },
-      { x: 14, z: -15 },
-      { x: -14, z: 15 },
-      { x: 14, z: 15 },
-      { x: -14, z: 35 },
-      { x: 14, z: 35 },
+      { x: -14, z: -60 },
+      { x: 14, z: -60 },
+      { x: -14, z: -40 },
+      { x: 14, z: -40 },
+      { x: -14, z: -20 },
+      { x: 14, z: -20 },
+      { x: -14, z: 20 },
+      { x: 14, z: 20 },
+      { x: -14, z: 40 },
+      { x: 14, z: 40 },
+      { x: -14, z: 60 },
+      { x: 14, z: 60 },
       // Поперечні бульвари (захід-схід)
-      { x: -35, z: -14 },
-      { x: -35, z: 14 },
-      { x: 35, z: -14 },
-      { x: 35, z: 14 },
-      // Центральна площа
-      { x: -8, z: 0 },
-      { x: 8, z: 0 },
-      { x: 0, z: -8 },
-      { x: 0, z: 8 },
+      { x: -50, z: -14 },
+      { x: -50, z: 14 },
+      { x: -30, z: -14 },
+      { x: -30, z: 14 },
+      { x: 30, z: -14 },
+      { x: 30, z: 14 },
+      { x: 50, z: -14 },
+      { x: 50, z: 14 },
+      // Центральна площа навколо бази
+      { x: -16, z: 0 },
+      { x: 16, z: 0 },
+      { x: 0, z: -16 },
+      { x: 0, z: 16 },
       // Підходи до Замкової гори
-      { x: 26, z: -30 },
-      { x: 26, z: 30 }
+      { x: 36, z: -40 },
+      { x: 36, z: 40 },
+      { x: 58, z: -30 },
+      { x: 58, z: 30 }
     ];
 
     for (const pos of streetLightCoords) {
@@ -900,18 +949,18 @@ export function buildWoTMapArena(mapId: MapBiomeId): BuiltMapArena {
   // --------------------------------------------------------------------------
   // 5.5. Точки спавну: Гравець, Дуель, Хвилі та Бочки
   // --------------------------------------------------------------------------
-  const playerSpawn = { x: 0, z: 52, yaw: Math.PI }; // Дивиться на північ (-Z) у центр арени
-  const duelEnemySpawn = { x: 0, z: -52, yaw: 0 };  // Дивиться на південь (+Z) у бік гравця
+  const playerSpawn = { x: 0, z: 85, yaw: Math.PI }; // Дивиться на північ (-Z) у центр арени
+  const duelEnemySpawn = { x: 0, z: -85, yaw: 0 };  // Дивиться на південь (+Z) у бік гравця
 
   const waveSpawnPoints: Array<{ x: number; z: number }> = [
-    { x: -58, z: -62 }, // Північний Захід
-    { x: 0, z: -68 },   // Північ
-    { x: 58, z: -62 },  // Північний Схід
-    { x: 68, z: 0 },    // Схід
-    { x: 58, z: 62 },   // Південний Схід
-    { x: -58, z: 62 },  // Південний Захід
-    { x: -68, z: 0 },   // Захід
-    { x: 26, z: -50 }   // Північний центр
+    { x: -95, z: -100 }, // Північний Захід
+    { x: 0, z: -115 },   // Північ
+    { x: 95, z: -100 },  // Північний Схід
+    { x: 115, z: 0 },    // Схід
+    { x: 95, z: 100 },   // Південний Схід
+    { x: -95, z: 100 },  // Південний Захід
+    { x: -115, z: 0 },   // Захід
+    { x: 45, z: -85 }    // Північний фланг
   ];
 
   return {

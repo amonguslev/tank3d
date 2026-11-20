@@ -1371,7 +1371,7 @@ if (minimapCanvas) {
     const clickX = ((clientX - rect.left) / rect.width) * 168;
     const clickY = ((clientY - rect.top) / rect.height) * 168;
 
-    const halfSize = Math.max(10, currentHudState?.worldHalfSize || 95);
+    const halfSize = Math.max(10, currentHudState?.worldHalfSize || 150);
     const cx = 168 / 2;
     const cy = 168 / 2;
     const scale = (168 * 0.46) / halfSize;

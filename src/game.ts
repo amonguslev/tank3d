@@ -782,22 +782,22 @@ export class TankGame3D {
   private initTeamBattleMode(): void {
     if (!this.arena || !this.playerRig) return;
 
-    // 1. Ensure player spawns at center of southern line (0, 52), facing north (yaw = Math.PI)
-    this.playerX = 0;
-    this.playerZ = 52;
-    this.playerHullYaw = Math.PI;
-    this.playerTurretYaw = Math.PI;
+    // 1. Ensure player spawns at southern base line, facing north (yaw = Math.PI)
+    this.playerX = this.arena.playerSpawn.x;
+    this.playerZ = this.arena.playerSpawn.z;
+    this.playerHullYaw = this.arena.playerSpawn.yaw;
+    this.playerTurretYaw = this.arena.playerSpawn.yaw;
     this.playerGroundY = this.arena.getHeightAt(this.playerX, this.playerZ);
     this.playerRig.root.position.set(this.playerX, this.playerGroundY, this.playerZ);
     this.playerRig.root.rotation.y = this.playerHullYaw;
-    this.input.resetCameraAngles(Math.PI, -0.05);
+    this.input.resetCameraAngles(this.arena.playerSpawn.yaw, -0.05);
 
-    // 2. Setup central capture base at (0, 0), radius 11m
+    // 2. Setup central capture base at (0, 0), radius 13m
     this.captureProgress = 0;
     this.captureTeam = null;
     this.captureOwnerProgressTeam = null;
     this.baseAlarmTimer = 0;
-    this.captureBaseVisual = createCaptureBaseMesh(11);
+    this.captureBaseVisual = createCaptureBaseMesh(13);
     const baseY = this.arena.getHeightAt(0, 0);
     this.captureBaseVisual.group.position.set(0, baseY, 0);
     this.battleScene.add(this.captureBaseVisual.group);
@@ -832,11 +832,11 @@ export class TankGame3D {
     this.teamEnemiesRoster = [];
 
     // 4. Spawn 4 allied bots on southern line
-    const allyXs = [-24, -12, 12, 24];
+    const allyXs = [-36, -18, 18, 36];
     for (const ax of allyXs) {
       const tierId = pickBotTierId();
       const spec = makeBotSpec(tierId, true);
-      const az = 52 + Math.random() * 3;
+      const az = this.arena.playerSpawn.z + (Math.random() * 4 - 2);
       const groundY = this.arena.getHeightAt(ax, az);
 
       const rig = createTankRig(tierId, { isAlly: true });
@@ -879,11 +879,11 @@ export class TankGame3D {
     }
 
     // 5. Spawn 5 enemy bots on northern line
-    const enemyXs = [-24, -12, 0, 12, 24];
+    const enemyXs = [-36, -18, 0, 18, 36];
     for (const ex of enemyXs) {
       const tierId = pickBotTierId();
       const spec = makeBotSpec(tierId, false);
-      const ez = -52 - Math.random() * 3;
+      const ez = this.arena.duelEnemySpawn.z - (Math.random() * 4 - 2);
       const groundY = this.arena.getHeightAt(ex, ez);
 
       const rig = createTankRig(tierId, { isEnemy: true });
@@ -1137,8 +1137,9 @@ export class TankGame3D {
 
     // Obstacle collision check
     if (!this.checkObstacleCollision(nextX, nextZ, this.playerRig.halfWidth + 0.35)) {
-      this.playerX = THREE.MathUtils.clamp(nextX, -88, 88);
-      this.playerZ = THREE.MathUtils.clamp(nextZ, -88, 88);
+      const playerClamp = WORLD_HALF_SIZE - 7;
+      this.playerX = THREE.MathUtils.clamp(nextX, -playerClamp, playerClamp);
+      this.playerZ = THREE.MathUtils.clamp(nextZ, -playerClamp, playerClamp);
     }
 
     // Terrain height & normal conformance
@@ -1204,10 +1205,10 @@ export class TankGame3D {
 
       const aspect = window.innerWidth / Math.max(1, window.innerHeight);
       // Розраховуємо висоту орбітальної камери з урахуванням тактичного зуму артилерії
-      const fullHeight = aspect < 1 ? Math.min(240, 165 / aspect) : 165;
+      const fullHeight = aspect < 1 ? Math.min(390, 265 / aspect) : 265;
       const zoomStep = snap.artyZoomStep || 1;
       const zoomT = THREE.MathUtils.clamp((zoomStep - 1) / 3, 0, 1);
-      const satHeight = THREE.MathUtils.lerp(fullHeight, 48, zoomT);
+      const satHeight = THREE.MathUtils.lerp(fullHeight, 52, zoomT);
 
       // При наближенні зміщуємо центр огляду камери до точки прицілювання
       const camX = this.artyAimPos.x * zoomT;
@@ -1927,8 +1928,9 @@ export class TankGame3D {
 
         enemy.hullYaw += enemy.strafeDir * 2.2 * dt;
         if (!this.checkObstacleCollision(nx, nz, tankRadius) && !this.checkTankCollision(nx, nz, tankRadius, enemy.id)) {
-          enemy.x = THREE.MathUtils.clamp(nx, -86, 86);
-          enemy.z = THREE.MathUtils.clamp(nz, -86, 86);
+          const enemyClamp = WORLD_HALF_SIZE - 9;
+          enemy.x = THREE.MathUtils.clamp(nx, -enemyClamp, enemyClamp);
+          enemy.z = THREE.MathUtils.clamp(nz, -enemyClamp, enemyClamp);
         }
       } else {
         // Navigate towards targetPos
@@ -1953,8 +1955,9 @@ export class TankGame3D {
           const tankRadius = enemy.rig.halfWidth + 0.35;
 
           if (!this.checkObstacleCollision(nx, nz, tankRadius) && !this.checkTankCollision(nx, nz, tankRadius, enemy.id)) {
-            enemy.x = THREE.MathUtils.clamp(nx, -86, 86);
-            enemy.z = THREE.MathUtils.clamp(nz, -86, 86);
+            const enemyClamp = WORLD_HALF_SIZE - 9;
+            enemy.x = THREE.MathUtils.clamp(nx, -enemyClamp, enemyClamp);
+            enemy.z = THREE.MathUtils.clamp(nz, -enemyClamp, enemyClamp);
             enemy.stuckTimer = Math.max(0, enemy.stuckTimer - dt * 2);
           } else {
             // Collision detected - increment stuck counter
@@ -2602,7 +2605,7 @@ export class TankGame3D {
   private updateTeamBattleBase(dt: number): void {
     if (!this.inBattle || this.currentMode !== 'team_battle') return;
 
-    const baseRadius = 11;
+    const baseRadius = 13;
     let alliesInZone = 0;
     let enemiesInZone = 0;
 
@@ -2887,7 +2890,7 @@ export class TankGame3D {
       const toEnemy = enemy3D.clone().sub(camPos);
 
       const isArtilleryMode = this.activeWeaponSlot === 2 && this.wasSniper;
-      const maxDist = isArtilleryMode ? 320 : 110;
+      const maxDist = isArtilleryMode ? 450 : 160;
       const lookDir = isArtilleryMode ? new THREE.Vector3(0, -1, 0) : this.cameraLookDir;
 
       // Discard enemies behind camera or too far
