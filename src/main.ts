@@ -248,7 +248,8 @@ game.showHangar(inspectedTank);
 function updatePointerHint(): void {
   if (currentScreen === 'battle' && !input.isTouchActive()) {
     const isLocked = document.pointerLockElement === canvas;
-    pointerHintEl.classList.toggle('hidden', isLocked);
+    const isArtySatellite = currentHudState?.isSniper && (currentHudState?.isArtilleryMode || currentHudState?.activeWeaponSlot === 2);
+    pointerHintEl.classList.toggle('hidden', isLocked || !!isArtySatellite);
   } else {
     pointerHintEl.classList.add('hidden');
   }
@@ -888,9 +889,12 @@ function updateBattleHud(hud: HudState): void {
   // Cursor style: crosshair in artillery satellite mode for free mouse aiming
   if (hud.isSniper && (hud.isArtilleryMode || hud.activeWeaponSlot === 2)) {
     canvas.style.cursor = 'crosshair';
+    document.body.style.cursor = 'crosshair';
   } else {
     canvas.style.cursor = 'default';
+    document.body.style.cursor = 'default';
   }
+  updatePointerHint();
 
   // 7. Tactical WoT Minimap
   renderMinimap(hud);

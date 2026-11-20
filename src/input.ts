@@ -71,7 +71,7 @@ export class InputManager {
   private isMouseDown = false;
   private lastMouseX = 0;
   private lastMouseY = 0;
-  private mouseNdc: MouseNdc | null = null;
+  private mouseNdc: MouseNdc = { x: 0, y: 0 };
   private mouseAimActive = false;
 
   // Touch analog move stick
@@ -242,7 +242,10 @@ export class InputManager {
 
       const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1;
       const ndcY = -((clientY - rect.top) / rect.height) * 2 + 1;
-      this.mouseNdc = { x: ndcX, y: ndcY };
+      this.mouseNdc = {
+        x: Math.max(-1, Math.min(1, ndcX)),
+        y: Math.max(-1, Math.min(1, ndcY))
+      };
       this.mouseAimActive = true;
     };
 
@@ -251,6 +254,15 @@ export class InputManager {
         updateNdc(e.clientX, e.clientY);
         this.mouseDeltaX += e.movementX || 0;
         this.mouseDeltaY += e.movementY || 0;
+
+        const isSatelliteArty = this.currentWeaponSlot === 2 && this.isSniper;
+        if (isSatelliteArty) {
+          if (this.pointerLocked) {
+            this.pointerLocked = false;
+            this.exitPointerLockSafe();
+          }
+          return;
+        }
 
         // When pointer is locked: movementX / movementY control camera angles
         if (this.pointerLocked) {
@@ -293,6 +305,7 @@ export class InputManager {
           // Request pointer lock on click during gameplay, EXCEPT in satellite artillery mode
           const isSatelliteArty = this.currentWeaponSlot === 2 && this.isSniper;
           if (isSatelliteArty) {
+            this.pointerLocked = false;
             this.exitPointerLockSafe();
           } else if (this.gameplayActive) {
             this.requestPointerLockSafe();
@@ -379,7 +392,14 @@ export class InputManager {
   private bindPointerLock(): void {
     const handlePointerLockChange = () => {
       const canvas = this.getCanvas();
-      this.pointerLocked = !!canvas && document.pointerLockElement === canvas;
+      const isLocked = !!canvas && document.pointerLockElement === canvas;
+      const isSatelliteArty = this.currentWeaponSlot === 2 && this.isSniper;
+      if (isSatelliteArty && isLocked) {
+        this.pointerLocked = false;
+        this.exitPointerLockSafe();
+      } else {
+        this.pointerLocked = isLocked;
+      }
     };
 
     document.addEventListener('pointerlockchange', handlePointerLockChange);
@@ -574,8 +594,13 @@ export class InputManager {
         this.sniperZoom = 2;
       }
       if (this.currentWeaponSlot === 2) {
+        this.pointerLocked = false;
         this.exitPointerLockSafe();
       } else if (this.gameplayActive) {
+        this.requestPointerLockSafe();
+      }
+    } else {
+      if (this.gameplayActive && this.currentWeaponSlot !== 2) {
         this.requestPointerLockSafe();
       }
     }
@@ -612,6 +637,12 @@ export class InputManager {
       steer = this.touchSteer;
     }
 
+    const isSatelliteArty = this.currentWeaponSlot === 2 && this.isSniper;
+    if (isSatelliteArty && this.pointerLocked) {
+      this.pointerLocked = false;
+      this.exitPointerLockSafe();
+    }
+
     const snapshot: WotInputSnapshot = {
       throttle: Math.max(-1, Math.min(1, throttle)),
       steer: Math.max(-1, Math.min(1, steer)),
@@ -624,9 +655,9 @@ export class InputManager {
       weaponSlotRequest: this.weaponSlotRequest,
       repairRequest: this.repairRequest,
       pauseRequest: this.pauseRequest,
-      pointerLocked: this.pointerLocked,
+      pointerLocked: isSatelliteArty ? false : this.pointerLocked,
       touchMode: this.isTouchActive(),
-      mouseNdc: this.mouseNdc ? { ...this.mouseNdc } : null,
+      mouseNdc: this.mouseNdc ? { ...this.mouseNdc } : { x: 0, y: 0 },
       mouseDeltaX: this.mouseDeltaX,
       mouseDeltaY: this.mouseDeltaY
     };
@@ -676,6 +707,7 @@ export class InputManager {
     if (this.currentWeaponSlot === 2) {
       this.isSniper = !this.isSniper;
       if (this.isSniper) {
+        this.pointerLocked = false;
         this.exitPointerLockSafe();
       }
       return;
@@ -711,7 +743,10 @@ export class InputManager {
     this.weaponSlotRequest = slot;
     this.currentWeaponSlot = slot;
     if (this.isSniper && slot === 2) {
+      this.pointerLocked = false;
       this.exitPointerLockSafe();
+    } else if (this.isSniper && slot === 1 && this.gameplayActive) {
+      this.requestPointerLockSafe();
     }
   }
 
@@ -721,7 +756,10 @@ export class InputManager {
   setCurrentWeaponSlot(slot: 1 | 2): void {
     this.currentWeaponSlot = slot;
     if (this.isSniper && slot === 2) {
+      this.pointerLocked = false;
       this.exitPointerLockSafe();
+    } else if (this.isSniper && slot === 1 && this.gameplayActive) {
+      this.requestPointerLockSafe();
     }
   }
 

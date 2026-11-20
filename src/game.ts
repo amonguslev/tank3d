@@ -216,6 +216,8 @@ export class TankGame3D {
   private artyInterShotCooldown = 0;
   private artyAutoReloadTimer = 0;
   private artyAimPos = new THREE.Vector2(0, 0);
+  private artyCameraCenter = new THREE.Vector2(0, 0);
+  private prevArtyZoomStep = 1;
   private artyReticleMesh: THREE.Group | null = null;
   private lastInputYaw = 0;
   private lastInputPitch = 0;
@@ -358,11 +360,11 @@ export class TankGame3D {
   }
 
   setArtilleryAim(worldX: number, worldZ: number): void {
-    const aimLimit = WORLD_HALF_SIZE - 1;
-    this.artyAimPos.set(
-      Math.max(-aimLimit, Math.min(aimLimit, worldX)),
-      Math.max(-aimLimit, Math.min(aimLimit, worldZ))
-    );
+    const aimLimit = WORLD_HALF_SIZE - 2;
+    const clX = THREE.MathUtils.clamp(worldX, -aimLimit, aimLimit);
+    const clZ = THREE.MathUtils.clamp(worldZ, -aimLimit, aimLimit);
+    this.artyAimPos.set(clX, clZ);
+    this.artyCameraCenter.set(clX, clZ);
   }
 
   startBattle(mode: GameModeKind, tierId: TankTierId, mapId: MapBiomeId): void {
@@ -426,6 +428,8 @@ export class TankGame3D {
     this.artyInterShotCooldown = 0;
     this.artyAutoReloadTimer = 0;
     this.artyAimPos.set(this.playerX, this.playerZ);
+    this.artyCameraCenter.set(0, 0);
+    this.prevArtyZoomStep = 1;
     this.lastInputYaw = spawn.yaw;
     this.lastInputPitch = -0.05;
 
@@ -1112,6 +1116,12 @@ export class TankGame3D {
   private updatePlayerMovement(snap: WotInputSnapshot, dt: number): void {
     if (!this.arena || !this.playerRig) return;
 
+    // В супутниковому режимі артилерії корпус стоїть на місці, а WASD керує панорамуванням камери
+    if (this.activeWeaponSlot === 2 && snap.isSniper) {
+      this.playerSpeedKmh = 0;
+      return;
+    }
+
     const stats = this.playerStats;
     const speedMult = this.speedBoostTimer > 0 ? 1.35 : 1.0;
 
@@ -1197,7 +1207,7 @@ export class TankGame3D {
     }
 
     if (isSlot2 && snap.isSniper) {
-      // 🛰️ Супутниковий режим артилерії: вид зверху на всю карту
+      // 🛰️ Супутниковий режим артилерії: вид зверху на всю карту 300×300м
       this.playerRig.frontTurretPivot.visible = true;
       if (this.playerRig.rearTurretPivot) {
         this.playerRig.rearTurretPivot.visible = true;
@@ -1206,13 +1216,48 @@ export class TankGame3D {
       const aspect = window.innerWidth / Math.max(1, window.innerHeight);
       // Розраховуємо висоту орбітальної камери з урахуванням тактичного зуму артилерії
       const fullHeight = aspect < 1 ? Math.min(390, 265 / aspect) : 265;
-      const zoomStep = snap.artyZoomStep || 1;
+      const zoomStep = THREE.MathUtils.clamp(snap.artyZoomStep || 1, 1, 4);
+
+      if (zoomStep === 1) {
+        // Базовий огляд (зум 1): камера строго по центру арени (0, satHeight, 0.001)
+        this.artyCameraCenter.set(0, 0);
+      } else if (this.prevArtyZoomStep === 1 && zoomStep > 1) {
+        // Перехід у наближення: фокусуємось навколо поточної точки прицілу
+        this.artyCameraCenter.set(this.artyAimPos.x, this.artyAimPos.y);
+      }
+      this.prevArtyZoomStep = zoomStep;
+
+      // При зумі (zoomStep > 1) гравець може вільно переміщувати камеру клавішами WASD або стрілками
+      if (zoomStep > 1) {
+        const panSpeed = 70; // м/с
+        let panX = 0;
+        let panZ = 0;
+        if (snap.steer > 0.05) panX -= 1; // Вліво (A / Left)
+        if (snap.steer < -0.05) panX += 1; // Вправо (D / Right)
+        if (snap.throttle > 0.05) panZ -= 1; // Вгору / Північ (W / Up)
+        if (snap.throttle < -0.05) panZ += 1; // Вниз / Південь (S / Down)
+        if (panX !== 0 && panZ !== 0) {
+          panX *= Math.SQRT1_2;
+          panZ *= Math.SQRT1_2;
+        }
+        if (panX !== 0 || panZ !== 0) {
+          this.artyCameraCenter.x += panX * panSpeed * dt;
+          this.artyCameraCenter.y += panZ * panSpeed * dt;
+        }
+      }
+
+      // Обмежуємо центр огляду камери межами карти
+      const camLimit = WORLD_HALF_SIZE - 15;
+      this.artyCameraCenter.x = THREE.MathUtils.clamp(this.artyCameraCenter.x, -camLimit, camLimit);
+      this.artyCameraCenter.y = THREE.MathUtils.clamp(this.artyCameraCenter.y, -camLimit, camLimit);
+
       const zoomT = THREE.MathUtils.clamp((zoomStep - 1) / 3, 0, 1);
       const satHeight = THREE.MathUtils.lerp(fullHeight, 52, zoomT);
 
-      // При наближенні зміщуємо центр огляду камери до точки прицілювання
-      const camX = this.artyAimPos.x * zoomT;
-      const camZ = this.artyAimPos.y * zoomT;
+      // Позиція камери залежить виключно від artyCameraCenter, а НЕ від точки прицілу artyAimPos!
+      // Завдяки цьому повністю ліквідовано ефект Runaway Drift (зворотного зв'язку)
+      const camX = this.artyCameraCenter.x * zoomT;
+      const camZ = this.artyCameraCenter.y * zoomT;
 
       this.camera.position.set(camX, satHeight, camZ + 0.001);
       this.camera.up.set(0, 0, -1); // North (-Z) зверху екрана, South (+Z) знизу
@@ -1224,7 +1269,8 @@ export class TankGame3D {
       }
 
       // Керування точкою прицілу artyAimPos:
-      if (!snap.pointerLocked && snap.mouseNdc) {
+      // Прицілювання з mouseNdc працює ЗАВЖДИ (не блокується pointerLocked!)
+      if (snap.mouseNdc) {
         const raycaster = new THREE.Raycaster();
         raycaster.setFromCamera(new THREE.Vector2(snap.mouseNdc.x, snap.mouseNdc.y), this.camera);
 
@@ -1244,27 +1290,12 @@ export class TankGame3D {
           }
           this.artyAimPos.set(intersect.x, intersect.z);
         }
-      } else if (snap.pointerLocked || (snap.mouseDeltaX && snap.mouseDeltaX !== 0) || (snap.mouseDeltaY && snap.mouseDeltaY !== 0)) {
-        const dx = snap.mouseDeltaX ?? 0;
-        const dy = snap.mouseDeltaY ?? 0;
-        if (dx !== 0 || dy !== 0) {
-          const sens = 0.22 / Math.max(1, zoomStep);
-          this.artyAimPos.x += dx * sens;
-          this.artyAimPos.y += dy * sens;
-        } else if (snap.pointerLocked) {
-          let dYaw = snap.cameraYaw - this.lastInputYaw;
-          let dPitch = snap.cameraPitch - this.lastInputPitch;
-          while (dYaw < -Math.PI) dYaw += Math.PI * 2;
-          while (dYaw > Math.PI) dYaw -= Math.PI * 2;
-          this.artyAimPos.x += (dYaw * 50) / Math.max(1, zoomStep);
-          this.artyAimPos.y -= (dPitch * 50) / Math.max(1, zoomStep);
-        }
       }
 
-      // Дозволяємо прицілювання по ВСІЙ відкритій карті від краю до краю (100% карти)!
-      const aimLimit = WORLD_HALF_SIZE - 1;
-      this.artyAimPos.x = Math.max(-aimLimit, Math.min(aimLimit, this.artyAimPos.x));
-      this.artyAimPos.y = Math.max(-aimLimit, Math.min(aimLimit, this.artyAimPos.y));
+      // Дозволяємо прицілювання по ВСІЙ відкритій карті від краю до краю (100% карти: -148м .. +148м)
+      const aimLimit = WORLD_HALF_SIZE - 2;
+      this.artyAimPos.x = THREE.MathUtils.clamp(this.artyAimPos.x, -aimLimit, aimLimit);
+      this.artyAimPos.y = THREE.MathUtils.clamp(this.artyAimPos.y, -aimLimit, aimLimit);
 
       this.lastInputYaw = snap.cameraYaw;
       this.lastInputPitch = snap.cameraPitch;
@@ -1272,6 +1303,8 @@ export class TankGame3D {
       if (this.artyReticleMesh) {
         const groundY = this.arena.getHeightAt(this.artyAimPos.x, this.artyAimPos.y);
         this.artyReticleMesh.position.set(this.artyAimPos.x, groundY + 0.15, this.artyAimPos.y);
+        const reticleScale = satHeight / 110;
+        this.artyReticleMesh.scale.set(reticleScale, reticleScale, reticleScale);
         this.artyReticleMesh.visible = true;
       }
     } else {

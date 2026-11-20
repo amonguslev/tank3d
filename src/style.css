@@ -383,6 +383,10 @@ body,
   pointer-events: none;
 }
 
+.sniper-overlay * {
+  pointer-events: none !important;
+}
+
 /* Optical Periscope Vignette */
 .sniper-vignette {
   position: absolute;
