@@ -1525,7 +1525,7 @@ export function createPickupMesh(kind: PowerUpKind): THREE.Group {
 }
 
 // ============================================================================
-// Capture Base Mesh & Indicator Zone (5v5 Team Battle Mode)
+// Capture Base Mesh & Indicator Zone (2v2 Team Battle Mode)
 // ============================================================================
 
 export interface CaptureBaseVisual {

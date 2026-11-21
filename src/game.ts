@@ -244,7 +244,7 @@ export class TankGame3D {
   // Duel Mode
   private duelOpponent: ActiveEnemy | null = null;
 
-  // Team Battle 5v5 + Capture Base Mode
+  // Team Battle 2v2 + Capture Base Mode
   private captureBaseVisual: CaptureBaseVisual | null = null;
   private captureProgress = 0;
   private captureTeam: TeamSide | 'contested' | null = null;
@@ -835,8 +835,8 @@ export class TankGame3D {
     this.teamAlliesRoster = [{ id: 0, tier: playerTierNum, isPlayer: true }];
     this.teamEnemiesRoster = [];
 
-    // 4. Spawn 4 allied bots on southern line
-    const allyXs = [-36, -18, 18, 36];
+    // 4. Spawn 1 allied bot on southern line (player at x=0, ally at x=18)
+    const allyXs = [18];
     for (const ax of allyXs) {
       const tierId = pickBotTierId();
       const spec = makeBotSpec(tierId, true);
@@ -882,8 +882,8 @@ export class TankGame3D {
       });
     }
 
-    // 5. Spawn 5 enemy bots on northern line
-    const enemyXs = [-36, -18, 0, 18, 36];
+    // 5. Spawn 2 enemy bots on northern line
+    const enemyXs = [-18, 18];
     for (const ex of enemyXs) {
       const tierId = pickBotTierId();
       const spec = makeBotSpec(tierId, false);
@@ -930,7 +930,7 @@ export class TankGame3D {
     }
 
     this.callbacks.onWaveBanner?.(
-      'КОМАНДНИЙ БІЙ 5 НА 5',
+      'КОМАНДНИЙ БІЙ 2 НА 2',
       'Знищте ворогів або захопіть центральну базу!'
     );
   }
@@ -2470,7 +2470,7 @@ export class TankGame3D {
       return;
     }
 
-    // Team Battle Victory Condition (all 5 enemies destroyed)
+    // Team Battle Victory Condition (all enemies destroyed)
     if (this.currentMode === 'team_battle' && this.inBattle) {
       const anyEnemyAlive = this.activeEnemies.some((e) => e.team === 'enemies' && e.hp > 0);
       if (!anyEnemyAlive) {

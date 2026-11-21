@@ -655,7 +655,7 @@ function updateBattleHud(hud: HudState): void {
     hudWaveBadgeEl.textContent = 'БОС 1 НА 1';
   } else if (hud.mode === 'team_battle') {
     hudModeTitleEl.textContent = '⚔️ КОМАНДНИЙ БІЙ';
-    hudWaveBadgeEl.textContent = '5 НА 5';
+    hudWaveBadgeEl.textContent = '2 НА 2';
   } else {
     hudModeTitleEl.textContent = 'ХВИЛІ';
     hudWaveBadgeEl.textContent = `ХВИЛЯ ${hud.waveNumber}`;
@@ -676,7 +676,7 @@ function updateBattleHud(hud: HudState): void {
     bossBarEl.classList.add('hidden');
   }
 
-  // 2b. Team Battle 5v5 HUD
+  // 2b. Team Battle 2v2 HUD
   if (hud.teamBattle && teamBattleHudEl) {
     teamBattleHudEl.classList.remove('hidden');
 
@@ -1240,7 +1240,7 @@ function handleBattleEnd(summary: BattleSummary): void {
   }
   resultTitleEl.style.color = summary.victory ? 'var(--wot-gold)' : 'var(--wot-red)';
 
-  resWaveEl.textContent = summary.mode === 'team_battle' ? '5v5' : summary.waveReached.toString();
+  resWaveEl.textContent = summary.mode === 'team_battle' ? '2v2' : summary.waveReached.toString();
   resKillsEl.textContent = summary.kills.toString();
   resDamageEl.textContent = summary.damageDealt.toString();
   resCoinsEl.textContent = `+${summary.coinsEarned} 🪙`;
