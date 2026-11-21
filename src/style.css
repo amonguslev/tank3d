@@ -655,6 +655,18 @@ body,
   }
 }
 
+/* 🛰️ В режимі артилерії верхні інформаційні плашки та перехрестя не повинні перехоплювати кліки миші */
+.battle-hud.is-artillery-mode .team-battle-hud,
+.battle-hud.is-artillery-mode .team-battle-hud *,
+.battle-hud.is-artillery-mode .top-bar-center,
+.battle-hud.is-artillery-mode .top-bar-center *,
+.battle-hud.is-artillery-mode .target-info,
+.battle-hud.is-artillery-mode .target-info *,
+.battle-hud.is-artillery-mode .wot-crosshair-container,
+.battle-hud.is-artillery-mode .wot-crosshair-container * {
+  pointer-events: none !important;
+}
+
 /* ==========================================================================
    Pointer Hint & Wave Announcement Banner
    ========================================================================== */

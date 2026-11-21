@@ -16,6 +16,7 @@ export interface TankVisualRig {
   rearTurretPivot: THREE.Group | null;
   rearGunPivot: THREE.Group | null;
   rearMuzzle: THREE.Object3D | null;
+  rearMuzzles?: THREE.Object3D[];
   rearSniperAnchor: THREE.Object3D | null;
   shieldMesh: THREE.Mesh;
   halfLength: number;
@@ -258,6 +259,7 @@ export function createTankRig(
   let rearTurretPivot: THREE.Group | null = null;
   let rearGunPivot: THREE.Group | null = null;
   let rearMuzzle: THREE.Object3D | null = null;
+  let rearMuzzles: THREE.Object3D[] = [];
   let rearSniperAnchor: THREE.Object3D | null = null;
 
   let frontGunMesh: THREE.Object3D = frontGunPivot;
@@ -806,7 +808,7 @@ export function createTankRig(
     frontMuzzle.position.set(0, 0, barrelLen + 0.55);
     frontSniperAnchor.position.set(0, 0.65, 1.25);
 
-    // B) REAR MINI-ARTILLERY TURRET ("Джміль" / Bumblebee Mini-Arty)
+    // B) REAR DUAL MINI-ARTILLERY TURRET ("Джміль" / Bumblebee Twin-Arty)
     rearTurretPivot = new THREE.Group();
     rearTurretPivot.name = 'RearTurretPivot';
     rearTurretPivot.position.set(0, 1.22, -2.05);
@@ -830,40 +832,139 @@ export function createTankRig(
     rearGunPivot = new THREE.Group();
     rearGunPivot.name = 'RearGunPivot';
     rearGunPivot.position.set(0, 0.25, 0.4);
+    rearGunPivot.rotation.x = -0.45; // ~26° upward elevation
     rearTurretPivot.add(rearGunPivot);
 
     const rearGunSub = new THREE.Group();
     rearGunPivot.add(rearGunSub);
     rearGunMesh = rearGunSub;
 
-    const rearMantlet = makeCylinder(0.18, 0.2, 0.35, 12, armorDarkMat, 'x');
+    // Wide reinforced mantlet for twin guns
+    const rearMantlet = makeBox(0.64, 0.26, 0.38, armorDarkMat);
     rearGunSub.add(rearMantlet);
 
-    // Mini artillery quick-fire mortar/autocannon barrel (+Z in rear turret space)
-    const rearBarrelLen = 1.15;
-    const rearBarrel = makeCylinder(0.08, 0.09, rearBarrelLen, 12, gunAccentMat, 'z');
-    rearBarrel.position.set(0, 0, rearBarrelLen / 2 + 0.1);
-    rearGunSub.add(rearBarrel);
+    // Twin artillery barrels: left (x = -0.16) and right (x = +0.16)
+    const rearBarrelLen = 1.3;
+    [-0.16, 0.16].forEach((bx) => {
+      const sleeve = makeCylinder(0.1, 0.11, 0.28, 12, armorDarkMat, 'z');
+      sleeve.position.set(bx, 0, 0.14);
+      rearGunSub.add(sleeve);
 
-    // Muzzle brake
-    const rearBrake = makeCylinder(0.12, 0.12, 0.18, 12, armorDarkMat, 'z');
-    rearBrake.position.set(0, 0, rearBarrelLen + 0.18);
-    rearGunSub.add(rearBrake);
+      const rearBarrel = makeCylinder(0.075, 0.09, rearBarrelLen, 14, gunAccentMat, 'z');
+      rearBarrel.position.set(bx, 0, rearBarrelLen / 2 + 0.14);
+      rearGunSub.add(rearBarrel);
 
-    if (hasGunAccent) {
-      const rearBrakeAccent = makeCylinder(0.13, 0.13, 0.06, 12, gunAccentMat, 'z');
-      rearBrakeAccent.position.set(0, 0, rearBarrelLen + 0.18);
-      rearGunSub.add(rearBrakeAccent);
-    }
+      const rearBrake = makeCylinder(0.12, 0.12, 0.22, 12, armorDarkMat, 'z');
+      rearBrake.position.set(bx, 0, rearBarrelLen + 0.22);
+      rearGunSub.add(rearBrake);
 
-    rearMuzzle = new THREE.Object3D();
-    rearMuzzle.name = 'RearMuzzle';
-    rearMuzzle.position.set(0, 0, rearBarrelLen + 0.28);
-    rearGunSub.add(rearMuzzle);
+      if (hasGunAccent) {
+        const rearBrakeAccent = makeCylinder(0.13, 0.13, 0.08, 12, gunAccentMat, 'z');
+        rearBrakeAccent.position.set(bx, 0, rearBarrelLen + 0.22);
+        rearGunSub.add(rearBrakeAccent);
+      }
+
+      const muzzle = new THREE.Object3D();
+      muzzle.name = bx < 0 ? 'RearMuzzleLeft' : 'RearMuzzleRight';
+      muzzle.position.set(bx, 0, rearBarrelLen + 0.32);
+      rearGunSub.add(muzzle);
+      rearMuzzles.push(muzzle);
+    });
+
+    rearMuzzle = rearMuzzles[0];
 
     rearSniperAnchor = new THREE.Object3D();
     rearSniperAnchor.name = 'RearSniperAnchor';
     rearSniperAnchor.position.set(0, 0.45, 0.5);
+    rearTurretPivot.add(rearSniperAnchor);
+  } else {
+    // ------------------------------------------------------------------------
+    // T-1..T-4: Compact Twin-Barrel Artillery Module ("Здвоєний Арт-Модуль")
+    // ------------------------------------------------------------------------
+    rearTurretPivot = new THREE.Group();
+    rearTurretPivot.name = 'RearTurretPivot';
+
+    let artyPos = new THREE.Vector3(0, 0.82, -0.95);
+    if (tierId === 'tier2') artyPos.set(0, 0.92, -1.15);
+    else if (tierId === 'tier3') artyPos.set(0, 1.02, -1.35);
+    else if (tierId === 'tier4') artyPos.set(0, 1.06, -1.45);
+
+    rearTurretPivot.position.copy(artyPos);
+    rearTurretPivot.rotation.y = Math.PI;
+    root.add(rearTurretPivot);
+
+    // Armor turret ring pedestal
+    const baseRing = makeCylinder(0.36, 0.42, 0.14, 14, armorDarkMat, 'y');
+    baseRing.position.set(0, 0.07, 0);
+    rearTurretPivot.add(baseRing);
+
+    // Compact armored dome
+    const artyDome = makeBox(0.66, 0.32, 0.62, turretMat);
+    artyDome.position.set(0, 0.22, -0.04);
+    rearTurretPivot.add(artyDome);
+
+    // Optics & targeting pod
+    const sensorPod = makeBox(0.18, 0.18, 0.22, armorDarkMat);
+    sensorPod.position.set(0.28, 0.38, 0.05);
+    rearTurretPivot.add(sensorPod);
+
+    const sensorLens = makeCylinder(0.05, 0.05, 0.03, 10, headlightMat, 'z');
+    sensorLens.position.set(0.28, 0.38, 0.16);
+    rearTurretPivot.add(sensorLens);
+
+    // Mini antenna
+    const modAntenna = makeCylinder(0.012, 0.012, 0.6, 6, metalTrimMat, 'y');
+    modAntenna.position.set(-0.26, 0.58, -0.2);
+    rearTurretPivot.add(modAntenna);
+
+    // Rear Gun Pivot with ~30° elevation upward
+    rearGunPivot = new THREE.Group();
+    rearGunPivot.name = 'RearGunPivot';
+    rearGunPivot.position.set(0, 0.24, 0.22);
+    rearGunPivot.rotation.x = -0.52; // ~30° upward elevation
+    rearTurretPivot.add(rearGunPivot);
+
+    const rearGunSub = new THREE.Group();
+    rearGunPivot.add(rearGunSub);
+    rearGunMesh = rearGunSub;
+
+    // Mantlet for twin guns
+    const mantlet = makeBox(0.5, 0.2, 0.26, armorDarkMat);
+    rearGunSub.add(mantlet);
+
+    // Twin artillery barrels: left (x = -0.13) and right (x = +0.13)
+    const rearBarrelLen = 0.95;
+    [-0.13, 0.13].forEach((bx) => {
+      const sleeve = makeCylinder(0.08, 0.09, 0.2, 12, armorDarkMat, 'z');
+      sleeve.position.set(bx, 0, 0.1);
+      rearGunSub.add(sleeve);
+
+      const rearBarrel = makeCylinder(0.055, 0.07, rearBarrelLen, 12, gunAccentMat, 'z');
+      rearBarrel.position.set(bx, 0, rearBarrelLen / 2 + 0.1);
+      rearGunSub.add(rearBarrel);
+
+      const rearBrake = makeCylinder(0.088, 0.088, 0.18, 12, armorDarkMat, 'z');
+      rearBrake.position.set(bx, 0, rearBarrelLen + 0.16);
+      rearGunSub.add(rearBrake);
+
+      if (hasGunAccent) {
+        const rearBrakeAccent = makeCylinder(0.095, 0.095, 0.06, 12, gunAccentMat, 'z');
+        rearBrakeAccent.position.set(bx, 0, rearBarrelLen + 0.16);
+        rearGunSub.add(rearBrakeAccent);
+      }
+
+      const muzzle = new THREE.Object3D();
+      muzzle.name = bx < 0 ? 'RearMuzzleLeft' : 'RearMuzzleRight';
+      muzzle.position.set(bx, 0, rearBarrelLen + 0.26);
+      rearGunSub.add(muzzle);
+      rearMuzzles.push(muzzle);
+    });
+
+    rearMuzzle = rearMuzzles[0];
+
+    rearSniperAnchor = new THREE.Object3D();
+    rearSniperAnchor.name = 'RearSniperAnchor';
+    rearSniperAnchor.position.set(0, 0.38, 0.35);
     rearTurretPivot.add(rearSniperAnchor);
   }
 
@@ -937,6 +1038,7 @@ export function createTankRig(
     rearTurretPivot,
     rearGunPivot,
     rearMuzzle,
+    rearMuzzles,
     rearSniperAnchor,
     shieldMesh,
     halfLength,

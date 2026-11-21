@@ -272,6 +272,7 @@ function setScreen(mode: ScreenMode): void {
     targetInfoEl.classList.add('hidden');
     sniperOverlayEl.classList.add('hidden');
     sniperOverlayEl.classList.remove('is-artillery-mode');
+    battleHudEl.classList.remove('is-artillery-mode');
     touchControlsEl.classList.add('hidden');
     waveBannerEl.classList.add('hidden');
     teamBattleHudEl?.classList.add('hidden');
@@ -292,6 +293,7 @@ function setScreen(mode: ScreenMode): void {
     targetInfoEl.classList.add('hidden');
     sniperOverlayEl.classList.add('hidden');
     sniperOverlayEl.classList.remove('is-artillery-mode');
+    battleHudEl.classList.remove('is-artillery-mode');
     touchControlsEl.classList.add('hidden');
     teamBattleHudEl?.classList.add('hidden');
     clearEnemyPlates();
@@ -841,6 +843,7 @@ function updateBattleHud(hud: HudState): void {
     sniperOverlayEl.classList.remove('hidden');
     const isArtyView = hud.activeWeaponSlot === 2 || hud.isArtilleryMode;
     sniperOverlayEl.classList.toggle('is-artillery-mode', isArtyView);
+    battleHudEl.classList.toggle('is-artillery-mode', isArtyView);
 
     sniperDistanceEl.textContent = `${Math.round(hud.aimDistanceMeters)} м`;
     sniperZoomLabelEl.textContent = isArtyView ? `x${hud.artyZoomStep || 1}` : `x${hud.sniperZoom}`;
@@ -848,8 +851,8 @@ function updateBattleHud(hud: HudState): void {
     if (isArtyView) {
       sniperWeaponLabelEl.textContent = '🛰️ СУПУТНИКОВИЙ АРТ-ПРИЦІЛ';
 
-      if (hud.artyShotsLeft === 2) {
-        sniperReloadTextEl.textContent = `АРТА ГОТОВА [2/2] • 2 ПОСТРІЛИ`;
+      if (hud.artyShotsLeft >= 2) {
+        sniperReloadTextEl.textContent = `АРТА ГОТОВА [2/2] • ЗАЛП 2 ПУШКИ`;
         sniperReloadFillEl.style.width = '100%';
       } else if (hud.artyShotsLeft === 1) {
         sniperReloadTextEl.textContent = `ДРУГИЙ ПОСТРІЛ ГОТОВИЙ [1/2]`;
@@ -875,6 +878,7 @@ function updateBattleHud(hud: HudState): void {
   } else {
     sniperOverlayEl.classList.add('hidden');
     sniperOverlayEl.classList.remove('is-artillery-mode');
+    battleHudEl.classList.remove('is-artillery-mode');
     arcadeReticleEl.classList.remove('hidden');
 
     if (activeReloadLeft > 0) {
@@ -1386,9 +1390,16 @@ if (minimapCanvas) {
     game.setArtilleryAim(worldX, worldZ);
   };
 
+  let isDraggingMinimap = false;
   minimapCanvas.addEventListener('pointerdown', (e) => {
     if (currentHudState && (currentHudState.activeWeaponSlot === 2 || currentHudState.isArtilleryMode)) {
       e.stopPropagation();
+      isDraggingMinimap = true;
+      try {
+        minimapCanvas.setPointerCapture(e.pointerId);
+      } catch {
+        // Safe fallback
+      }
       if (!currentHudState.isSniper) {
         input.toggleSniperTouch();
       }
@@ -1397,11 +1408,24 @@ if (minimapCanvas) {
   });
 
   minimapCanvas.addEventListener('pointermove', (e) => {
-    if (e.buttons === 1 && currentHudState && (currentHudState.activeWeaponSlot === 2 || currentHudState.isArtilleryMode)) {
+    if (isDraggingMinimap && currentHudState && (currentHudState.activeWeaponSlot === 2 || currentHudState.isArtilleryMode)) {
       e.stopPropagation();
       handleMinimapAim(e.clientX, e.clientY);
     }
   });
+
+  const stopMinimapDrag = (e: PointerEvent) => {
+    if (isDraggingMinimap) {
+      isDraggingMinimap = false;
+      try {
+        minimapCanvas.releasePointerCapture(e.pointerId);
+      } catch {
+        // Safe fallback
+      }
+    }
+  };
+  minimapCanvas.addEventListener('pointerup', stopMinimapDrag);
+  minimapCanvas.addEventListener('pointercancel', stopMinimapDrag);
 }
 
 // Window resize
@@ -1438,15 +1462,24 @@ window.addEventListener('appinstalled', () => {
   deferredInstallPrompt = null;
 });
 
-// Register Service Worker for offline PWA
-registerSW({
+// Register Service Worker for offline PWA with instant automatic update
+const updateSW = registerSW({
   immediate: true,
+  onNeedRefresh() {
+    // Автоматично застосовуємо нову версію при виявленні оновлення
+    updateSW(true);
+  },
   onOfflineReady() {
     if (offlineBadgeEl) {
       offlineBadgeEl.textContent = '⚡ Офлайн-режим готовий';
       offlineBadgeEl.classList.add('ready');
     }
   }
+});
+
+// Автоматична перевірка свіжих оновлень гри при кожному поверненні у вкладку
+window.addEventListener('focus', () => {
+  updateSW();
 });
 
 // Initial Hangar UI Render

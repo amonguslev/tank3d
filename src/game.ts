@@ -1227,9 +1227,12 @@ export class TankGame3D {
       }
       this.prevArtyZoomStep = zoomStep;
 
-      // При зумі (zoomStep > 1) гравець може вільно переміщувати камеру клавішами WASD або стрілками
+      // При зумі (zoomStep > 1) гравець може вільно переміщувати камеру:
+      // 1. Клавішами WASD або стрілками
+      // 2. Панорамуванням правою кнопкою миші (RMB Drag)
+      // 3. Плавним підведенням курсора до краю екрана (Edge Panning)
       if (zoomStep > 1) {
-        const panSpeed = 70; // м/с
+        const panSpeed = 75; // м/с
         let panX = 0;
         let panZ = 0;
         if (snap.steer > 0.05) panX -= 1; // Вліво (A / Left)
@@ -1244,20 +1247,56 @@ export class TankGame3D {
           this.artyCameraCenter.x += panX * panSpeed * dt;
           this.artyCameraCenter.y += panZ * panSpeed * dt;
         }
+
+        const currentZoomT = THREE.MathUtils.clamp((zoomStep - 1) / 3, 0, 1);
+        const currentSatHeight = THREE.MathUtils.lerp(fullHeight, 52, currentZoomT);
+
+        // 2. Панорамування правою кнопкою миші (RMB Drag)
+        if (snap.isRmbDown && (snap.mouseDeltaX || snap.mouseDeltaY)) {
+          const metersPerPixel = (currentSatHeight * 1.4) / Math.max(1, window.innerHeight);
+          this.artyCameraCenter.x -= (snap.mouseDeltaX || 0) * metersPerPixel;
+          this.artyCameraCenter.y -= (snap.mouseDeltaY || 0) * metersPerPixel;
+        }
+
+        // 3. Плавне панорамування при підведенні курсора до краю екрана (Edge Panning)
+        if (snap.mouseNdc) {
+          const edgeThreshold = 0.90;
+          const edgePanSpeed = 70; // м/с
+          let edgeX = 0;
+          let edgeZ = 0;
+
+          if (snap.mouseNdc.x > edgeThreshold) {
+            edgeX += (snap.mouseNdc.x - edgeThreshold) / (1 - edgeThreshold);
+          } else if (snap.mouseNdc.x < -edgeThreshold) {
+            edgeX -= (-snap.mouseNdc.x - edgeThreshold) / (1 - edgeThreshold);
+          }
+
+          if (snap.mouseNdc.y > edgeThreshold) {
+            // NDC Y > 0 — верх екрана, North (-Z)
+            edgeZ -= (snap.mouseNdc.y - edgeThreshold) / (1 - edgeThreshold);
+          } else if (snap.mouseNdc.y < -edgeThreshold) {
+            // NDC Y < 0 — низ екрана, South (+Z)
+            edgeZ += (-snap.mouseNdc.y - edgeThreshold) / (1 - edgeThreshold);
+          }
+
+          if (edgeX !== 0 || edgeZ !== 0) {
+            this.artyCameraCenter.x += edgeX * edgePanSpeed * dt;
+            this.artyCameraCenter.y += edgeZ * edgePanSpeed * dt;
+          }
+        }
       }
 
       // Обмежуємо центр огляду камери межами карти
-      const camLimit = WORLD_HALF_SIZE - 15;
+      const camLimit = WORLD_HALF_SIZE - 10;
       this.artyCameraCenter.x = THREE.MathUtils.clamp(this.artyCameraCenter.x, -camLimit, camLimit);
       this.artyCameraCenter.y = THREE.MathUtils.clamp(this.artyCameraCenter.y, -camLimit, camLimit);
 
       const zoomT = THREE.MathUtils.clamp((zoomStep - 1) / 3, 0, 1);
       const satHeight = THREE.MathUtils.lerp(fullHeight, 52, zoomT);
 
-      // Позиція камери залежить виключно від artyCameraCenter, а НЕ від точки прицілу artyAimPos!
-      // Завдяки цьому повністю ліквідовано ефект Runaway Drift (зворотного зв'язку)
-      const camX = this.artyCameraCenter.x * zoomT;
-      const camZ = this.artyCameraCenter.y * zoomT;
+      // При zoomStep > 1 камера знаходиться строго над artyCameraCenter (без спотворення zoomT!)
+      const camX = zoomStep === 1 ? 0 : this.artyCameraCenter.x;
+      const camZ = zoomStep === 1 ? 0 : this.artyCameraCenter.y;
 
       this.camera.position.set(camX, satHeight, camZ + 0.001);
       this.camera.up.set(0, 0, -1); // North (-Z) зверху екрана, South (+Z) знизу
@@ -1402,7 +1441,7 @@ export class TankGame3D {
     const rayDir = this.cameraLookDir.clone();
 
     // Check intersection with terrain and enemies
-    let closestDist = 160;
+    let closestDist = isSlot2 ? 320 : 180;
     let hitPoint = rayOrigin.clone().addScaledVector(rayDir, closestDist);
     let lockedEnemy: ActiveEnemy | null = null;
 
@@ -1440,7 +1479,8 @@ export class TankGame3D {
 
       // 2. Raymarch terrain if no enemy hit closer
       if (!lockedEnemy) {
-        for (let d = 8; d < closestDist; d += 2.5) {
+        const step = isSlot2 ? 3.5 : 2.5;
+        for (let d = 8; d < closestDist; d += step) {
           const testP = rayOrigin.clone().addScaledVector(rayDir, d);
           const terrY = this.arena.getHeightAt(testP.x, testP.z);
           if (testP.y <= terrY) {
@@ -1485,13 +1525,27 @@ export class TankGame3D {
     activeTurretPivot.rotation.y += yawStep;
     this.playerTurretYaw = this.playerHullYaw + activeTurretPivot.rotation.y;
 
-    // Vertical Gun Pitch
+    // Smoothly stow inactive turret
+    if (!isSlot2 && this.playerRig.rearTurretPivot) {
+      let rDiff = Math.PI - this.playerRig.rearTurretPivot.rotation.y;
+      while (rDiff < -Math.PI) rDiff += Math.PI * 2;
+      while (rDiff > Math.PI) rDiff -= Math.PI * 2;
+      this.playerRig.rearTurretPivot.rotation.y += Math.sign(rDiff) * Math.min(Math.abs(rDiff), 2.5 * dt);
+    }
+    if (isSlot2) {
+      let fDiff = 0 - this.playerRig.frontTurretPivot.rotation.y;
+      while (fDiff < -Math.PI) fDiff += Math.PI * 2;
+      while (fDiff > Math.PI) fDiff -= Math.PI * 2;
+      this.playerRig.frontTurretPivot.rotation.y += Math.sign(fDiff) * Math.min(Math.abs(fDiff), 2.5 * dt);
+    }
+
+    // Vertical Gun Pitch (пушки артилерії тримають кут підйому ~30° вгору)
     const distXZ = Math.hypot(localHit.x - localPivot.x, localHit.z - localPivot.z);
     const dy = localHit.y - (localPivot.y + activeGunPivot.position.y);
-    const desiredPitch = -Math.atan2(dy, Math.max(0.1, distXZ));
+    const desiredPitch = isSlot2 ? -0.52 : -Math.atan2(dy, Math.max(0.1, distXZ));
 
-    // Clamp elevation [-0.42 (up) .. +0.18 (down)]
-    const clampedPitch = Math.max(-0.42, Math.min(0.18, desiredPitch));
+    // Clamp elevation [-0.55 (up) .. +0.18 (down)]
+    const clampedPitch = isSlot2 ? -0.52 : Math.max(-0.42, Math.min(0.18, desiredPitch));
     let pitchDiff = clampedPitch - activeGunPivot.rotation.x;
     const pitchStep = Math.sign(pitchDiff) * Math.min(Math.abs(pitchDiff), 2.8 * dt);
     activeGunPivot.rotation.x += pitchStep;
@@ -1543,19 +1597,12 @@ export class TankGame3D {
     if (isSlot2) {
       if (this.secondaryReloadLeft > 0 || this.artyInterShotCooldown > 0 || this.artyShotsLeft <= 0) return;
 
-      this.artyShotsLeft--;
-      if (this.artyShotsLeft <= 0) {
-        this.artyShotsLeft = 0;
-        this.secondaryReloadLeft = 10.0; // Рівно 10.0 секунд перезарядки барабану на 2 снаряди
-        this.artyInterShotCooldown = 0;
-        this.artyAutoReloadTimer = 0;
-      } else {
-        this.artyInterShotCooldown = 0.5; // Пауза 0.5с між 1 і 2 пострілом
-        this.secondaryReloadLeft = 0; // Не блокуємо другий постріл!
-        this.artyAutoReloadTimer = 10.0; // Якщо 2-й постріл не зроблено, батарея перезарядиться через 10с
-      }
+      this.artyShotsLeft = 0;
+      this.secondaryReloadLeft = weapon.reloadSec; // Перезарядка арт-батареї
+      this.artyInterShotCooldown = 0;
+      this.artyAutoReloadTimer = 0;
       this.playerRearRecoil = 1.0;
-      this.screenShakeIntensity = 0.55;
+      this.screenShakeIntensity = 0.65;
     } else {
       if (this.primaryReloadLeft > 0) return;
       this.primaryReloadLeft = weapon.reloadSec;
@@ -1603,14 +1650,14 @@ export class TankGame3D {
             targetZ = camPos.z + camDir.z * t;
           }
         } else {
-          // Погляд у горизонт або вгору — беремо далеку дистанцію погляду
-          const dist = 140;
+          // Погляд у горизонт або вгору — беремо далеку дистанцію погляду (до країв карти)
+          const dist = 320;
           targetX = this.playerX + camDir.x * dist;
           targetZ = this.playerZ + camDir.z * dist;
         }
 
         // Якщо зафіксовано ворога під прицілом і дистанція валідна:
-        if (this.targetEnemyName && this.aimDistanceMeters > 0 && this.aimDistanceMeters < 180) {
+        if (this.targetEnemyName && this.aimDistanceMeters > 0 && this.aimDistanceMeters < 320) {
           targetX = muzzlePos.x + camDir.x * this.aimDistanceMeters;
           targetZ = muzzlePos.z + camDir.z * this.aimDistanceMeters;
         }
@@ -1620,48 +1667,76 @@ export class TankGame3D {
         target3D = new THREE.Vector3(targetX, this.arena.getHeightAt(targetX, targetZ), targetZ);
       }
 
-      if (weapon.dispersionDeg > 0) {
-        const spread = (Math.random() - 0.5) * 1.5;
-        target3D.x += spread;
-        target3D.z += (Math.random() - 0.5) * 1.5;
-      }
+      // Здвоєна стрільба з 2 пушок артилерії (дуплет з лівої та правої пушки)
+      const muzzles = (this.playerRig.rearMuzzles && this.playerRig.rearMuzzles.length >= 2)
+        ? this.playerRig.rearMuzzles
+        : (this.playerRig.rearMuzzle ? [this.playerRig.rearMuzzle, this.playerRig.rearMuzzle] : [this.playerRig.frontMuzzle, this.playerRig.frontMuzzle]);
 
-      const dx = target3D.x - muzzlePos.x;
-      const dy = target3D.y - muzzlePos.y;
-      const dz = target3D.z - muzzlePos.z;
-      const horizDist = Math.hypot(dx, dz);
-      const flightTime = Math.min(2.1, Math.max(0.85, horizDist * 0.009 + 0.65));
       const g = 45.0;
-      const vel = new THREE.Vector3(
-        dx / flightTime,
-        (dy + 0.5 * g * flightTime * flightTime) / flightTime,
-        dz / flightTime
-      );
+      const arena = this.arena;
 
-      // Спалах та звук артилерії
-      this.battleParticles.spawnMuzzleFlash(muzzlePos, vel.clone().normalize(), 'mini_artillery');
-      this.audio.playShoot('mini_artillery');
+      const launchArtyShell = (muzzle: THREE.Object3D, offsetSpreadX: number) => {
+        const mPos = new THREE.Vector3();
+        muzzle.getWorldPosition(mPos);
 
-      const mesh = createProjectileMesh('mini_artillery', false);
-      mesh.position.copy(muzzlePos);
-      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), vel.clone().normalize());
-      this.battleScene.add(mesh);
+        const target = target3D.clone();
+        if (weapon.dispersionDeg > 0) {
+          const spread = (Math.random() - 0.5) * 1.5;
+          target.x += spread + offsetSpreadX;
+          target.z += (Math.random() - 0.5) * 1.5;
+          target.y = arena.getHeightAt(target.x, target.z);
+        }
 
-      this.projectiles.push({
-        mesh,
-        pos: muzzlePos.clone(),
-        vel,
-        team: 'allies',
-        fromPlayer: true,
-        damage,
-        style: 'mini_artillery',
-        aoeRadius: weapon.aoeRadius,
-        chainCount: weapon.chainCount ?? 0,
-        chainRange: weapon.chainRange ?? 0,
-        gravity: g,
-        life: 0,
-        maxLife: 3.5
-      });
+        const dx = target.x - mPos.x;
+        const dy = target.y - mPos.y;
+        const dz = target.z - mPos.z;
+        const horizDist = Math.hypot(dx, dz);
+        const peakY = Math.max(mPos.y, target.y) + Math.max(22, horizDist * 0.28 + 12);
+        const velY = Math.sqrt(2 * g * (peakY - mPos.y));
+        const tUp = velY / g;
+        const tDown = Math.sqrt(2 * (peakY - target.y) / g);
+        const flightTime = tUp + tDown;
+        const velX = dx / flightTime;
+        const velZ = dz / flightTime;
+        const vel = new THREE.Vector3(velX, velY, velZ);
+
+        // Спалах та звук артилерії
+        this.battleParticles.spawnMuzzleFlash(mPos, vel.clone().normalize(), 'mini_artillery');
+        this.audio.playShoot('mini_artillery');
+
+        const mesh = createProjectileMesh('mini_artillery', false);
+        mesh.position.copy(mPos);
+        mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), vel.clone().normalize());
+        this.battleScene.add(mesh);
+
+        this.projectiles.push({
+          mesh,
+          pos: mPos.clone(),
+          vel,
+          team: 'allies',
+          fromPlayer: true,
+          damage,
+          style: 'mini_artillery',
+          aoeRadius: weapon.aoeRadius,
+          chainCount: weapon.chainCount ?? 0,
+          chainRange: weapon.chainRange ?? 0,
+          gravity: g,
+          life: 0,
+          maxLife: Math.max(6.5, flightTime + 2.5)
+        });
+      };
+
+      // Перший вистріл: ліва пушка артилерії
+      launchArtyShell(muzzles[0], -0.6);
+
+      // Другий вистріл: права пушка артилерії (дуплет через 0.1с з окремим спалахом та звуком)
+      window.setTimeout(() => {
+        if (!this.battleScene || !this.playerRig) return;
+        launchArtyShell(muzzles[1], 0.6);
+        this.playerRearRecoil = 1.0;
+        this.screenShakeIntensity = 0.55;
+      }, 100);
+
       return;
     }
 
@@ -2168,21 +2243,23 @@ export class TankGame3D {
         continue;
       }
 
-      // 2. Obstacle collision
-      for (const obs of this.arena.obstacles) {
-        const obsGroundY = this.arena.getHeightAt(obs.x, obs.z);
-        if (p.pos.y >= obsGroundY && p.pos.y <= obsGroundY + obs.height) {
-          const d = Math.hypot(p.pos.x - obs.x, p.pos.z - obs.z);
-          if (d <= obs.radius) {
-            this.resolveProjectileImpact(p, p.pos, null);
-            this.battleScene.remove(p.mesh);
-            this.projectiles.splice(i, 1);
-            collided = true;
-            break;
+      // 2. Obstacle collision (снаряди артилерії mini_artillery проходять крізь камні та перешкоди)
+      if (p.style !== 'mini_artillery') {
+        for (const obs of this.arena.obstacles) {
+          const obsGroundY = this.arena.getHeightAt(obs.x, obs.z);
+          if (p.pos.y >= obsGroundY && p.pos.y <= obsGroundY + obs.height) {
+            const d = Math.hypot(p.pos.x - obs.x, p.pos.z - obs.z);
+            if (d <= obs.radius) {
+              this.resolveProjectileImpact(p, p.pos, null);
+              this.battleScene.remove(p.mesh);
+              this.projectiles.splice(i, 1);
+              collided = true;
+              break;
+            }
           }
         }
+        if (collided) continue;
       }
-      if (collided) continue;
 
       // 3. Explosive Barrels collision
       for (const b of this.barrels) {

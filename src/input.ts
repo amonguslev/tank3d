@@ -32,6 +32,7 @@ export interface WotInputSnapshot {
   mouseNdc?: { x: number; y: number } | null;
   mouseDeltaX?: number;
   mouseDeltaY?: number;
+  isRmbDown?: boolean;
 }
 
 export class InputManager {
@@ -69,6 +70,7 @@ export class InputManager {
   private canvas: HTMLCanvasElement | null = null;
   private mouseFire = false;
   private isMouseDown = false;
+  private isRmbDown = false;
   private lastMouseX = 0;
   private lastMouseY = 0;
   private mouseNdc: MouseNdc = { x: 0, y: 0 };
@@ -252,8 +254,22 @@ export class InputManager {
     window.addEventListener('pointermove', (e) => {
       if (e.pointerType === 'mouse' || e.pointerType === 'pen') {
         updateNdc(e.clientX, e.clientY);
-        this.mouseDeltaX += e.movementX || 0;
-        this.mouseDeltaY += e.movementY || 0;
+        const movX =
+          e.movementX !== undefined && e.movementX !== 0
+            ? e.movementX
+            : this.lastMouseX
+              ? e.clientX - this.lastMouseX
+              : 0;
+        const movY =
+          e.movementY !== undefined && e.movementY !== 0
+            ? e.movementY
+            : this.lastMouseY
+              ? e.clientY - this.lastMouseY
+              : 0;
+        this.lastMouseX = e.clientX;
+        this.lastMouseY = e.clientY;
+        this.mouseDeltaX += movX;
+        this.mouseDeltaY += movY;
 
         const isSatelliteArty = this.currentWeaponSlot === 2 && this.isSniper;
         if (isSatelliteArty) {
@@ -267,23 +283,18 @@ export class InputManager {
         // When pointer is locked: movementX / movementY control camera angles
         if (this.pointerLocked) {
           const sens = this.isSniper ? 0.0022 / this.sniperZoom : 0.0022;
-          this.cameraYaw -= e.movementX * sens;
+          this.cameraYaw -= (e.movementX || movX) * sens;
           this.cameraPitch = Math.max(
             -0.35,
-            Math.min(0.55, this.cameraPitch - e.movementY * sens)
+            Math.min(0.55, this.cameraPitch - (e.movementY || movY) * sens)
           );
         } else if (this.isMouseDown && this.gameplayActive) {
           // Fallback camera rotation if pointer lock is not engaged
-          const dx = e.clientX - this.lastMouseX;
-          const dy = e.clientY - this.lastMouseY;
-          this.lastMouseX = e.clientX;
-          this.lastMouseY = e.clientY;
-
           const sens = this.isSniper ? 0.0022 / this.sniperZoom : 0.0022;
-          this.cameraYaw -= dx * sens;
+          this.cameraYaw -= movX * sens;
           this.cameraPitch = Math.max(
             -0.35,
-            Math.min(0.55, this.cameraPitch - dy * sens)
+            Math.min(0.55, this.cameraPitch - movY * sens)
           );
         }
       } else if (e.pointerType === 'touch') {
@@ -293,48 +304,67 @@ export class InputManager {
       }
     });
 
-    if (canvas) {
-      canvas.addEventListener('pointerdown', (e) => {
-        this.onAnyInteraction?.();
-        if (e.pointerType === 'mouse') {
-          updateNdc(e.clientX, e.clientY);
-          this.isMouseDown = true;
-          this.lastMouseX = e.clientX;
-          this.lastMouseY = e.clientY;
+    window.addEventListener('pointerdown', (e) => {
+      this.onAnyInteraction?.();
+      if (!this.gameplayActive) return;
 
-          // Request pointer lock on click during gameplay, EXCEPT in satellite artillery mode
-          const isSatelliteArty = this.currentWeaponSlot === 2 && this.isSniper;
-          if (isSatelliteArty) {
-            this.pointerLocked = false;
-            this.exitPointerLockSafe();
-          } else if (this.gameplayActive) {
-            this.requestPointerLockSafe();
-          }
+      const target = e.target as HTMLElement | null;
+      // Не стріляти при кліках по модалках/меню паузи/ангару/результатах бою
+      if (
+        target?.closest(
+          '.modal, .modal-backdrop, .hangar-screen, #pause-modal, #battle-results-modal, .pause-modal, .battle-results-modal'
+        )
+      ) {
+        return;
+      }
+      // Не стріляти при кліках по кнопках керування (пауза, слоти гармат, ремкомплект тощо) або мінікарті
+      if (target?.closest('button, .action-slot, .touch-btn, #btn-pause, .minimap-container')) {
+        return;
+      }
 
-          if (e.button === 0) {
-            // Left click: Fire
-            this.mouseFire = true;
-            this.fireQueued = true;
-          } else if (e.button === 2) {
-            // Right click: Sniper toggle
+      if (e.pointerType === 'mouse') {
+        updateNdc(e.clientX, e.clientY);
+        this.isMouseDown = true;
+        this.lastMouseX = e.clientX;
+        this.lastMouseY = e.clientY;
+
+        // Request pointer lock on click during gameplay, EXCEPT in satellite artillery mode
+        const isSatelliteArty = this.currentWeaponSlot === 2 && this.isSniper;
+        if (isSatelliteArty) {
+          this.pointerLocked = false;
+          this.exitPointerLockSafe();
+        } else if (this.gameplayActive) {
+          this.requestPointerLockSafe();
+        }
+
+        if (e.button === 0) {
+          // Left click: Fire
+          this.mouseFire = true;
+          this.fireQueued = true;
+        } else if (e.button === 2) {
+          // Right click
+          this.isRmbDown = true;
+          if (!isSatelliteArty) {
             e.preventDefault();
             this.toggleSniperMode();
           }
-        } else if (e.pointerType === 'touch') {
-          updateNdc(e.clientX, e.clientY);
-          if (this.isSniper && this.currentWeaponSlot === 2) {
-            // В супутниковому режимі артилерії — прямий дотик наводить і викликає постріл
-            this.touchFire = true;
-            this.fireQueued = true;
-          }
         }
-      });
-    }
+      } else if (e.pointerType === 'touch') {
+        updateNdc(e.clientX, e.clientY);
+        if (this.isSniper && this.currentWeaponSlot === 2) {
+          // В супутниковому режимі артилерії — прямий дотик наводить і викликає постріл
+          this.touchFire = true;
+          this.fireQueued = true;
+        }
+      }
+    });
 
     window.addEventListener('pointerup', (e) => {
       if (e.pointerType === 'mouse') {
         if (e.button === 0) {
           this.mouseFire = false;
+        } else if (e.button === 2) {
+          this.isRmbDown = false;
         }
         this.isMouseDown = false;
       } else if (e.pointerType === 'touch') {
@@ -659,7 +689,8 @@ export class InputManager {
       touchMode: this.isTouchActive(),
       mouseNdc: this.mouseNdc ? { ...this.mouseNdc } : { x: 0, y: 0 },
       mouseDeltaX: this.mouseDeltaX,
-      mouseDeltaY: this.mouseDeltaY
+      mouseDeltaY: this.mouseDeltaY,
+      isRmbDown: this.isRmbDown
     };
 
     // Reset single-shot flags
@@ -740,6 +771,11 @@ export class InputManager {
    * One-time weapon slot request from UI buttons.
    */
   requestWeaponSlot(slot: 1 | 2): void {
+    if (slot === 2 && this.currentWeaponSlot === 2) {
+      // Якщо гравець уже на слоті 2 і повторно тисне 2 або клікає на слот [2] Арта — перемикаємо супутниковий приціл!
+      this.toggleSniperMode();
+      return;
+    }
     this.weaponSlotRequest = slot;
     this.currentWeaponSlot = slot;
     if (this.isSniper && slot === 2) {
@@ -865,6 +901,7 @@ export class InputManager {
     this.keyFire = false;
     this.mouseFire = false;
     this.isMouseDown = false;
+    this.isRmbDown = false;
     this.fireQueued = false;
     this.autoAimTap = false;
     this.touchFire = false;
